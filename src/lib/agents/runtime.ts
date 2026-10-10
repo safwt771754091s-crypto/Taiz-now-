@@ -5,6 +5,7 @@ import { writeProfessionally, draftRebuttal } from "@/lib/writer";
 import { publishContent, publishText } from "@/lib/social/connect";
 import { slugify } from "@/lib/slug";
 import { AGENT_CATALOG } from "./catalog";
+import { yemenFeeds, collectFeed } from "./sources";
 
 export type AgentTickResult = {
   agent: string;
@@ -32,6 +33,60 @@ async function record(agentId: string, slug: string, action: string, result: Age
       errorCount: result.ok ? undefined : { increment: 1 },
     },
   });
+}
+
+/** COLLECTOR — pull fresh items from public feeds into the report queue. */
+async function runCollector(): Promise<AgentTickResult> {
+  const feeds = yemenFeeds().slice(0, Number(process.env.COLLECTOR_MAX_FEEDS || 5));
+  const sinceHours = Number(process.env.COLLECTOR_SINCE_HOURS || 72);
+  const cutoff = Date.now() - sinceHours * 3600_000;
+  let collected = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const feed of feeds) {
+    try {
+      const items = await collectFeed(feed.url, feed.label);
+      for (const item of items.slice(0, 10)) {
+        if (!item.link || !item.title) continue;
+        const published = item.publishedAt ? Date.parse(item.publishedAt) : NaN;
+        if (Number.isFinite(published) && published < cutoff) {
+          skipped++;
+          continue;
+        }
+        const existing = await prisma.report.findFirst({ where: { sourceUrl: item.link } });
+        if (existing) {
+          skipped++;
+          continue;
+        }
+        await prisma.report.create({
+          data: {
+            type: "NEWS",
+            title: item.title.slice(0, 180),
+            description: (item.summary || item.title).slice(0, 4000),
+            sourceUrl: item.link,
+            origin: feed.label,
+            anonymous: false,
+            priority: 1,
+          },
+        });
+        collected++;
+      }
+    } catch (err) {
+      errors.push(`${feed.label}: ${(err as Error).message}`);
+    }
+  }
+
+  return {
+    ok: errors.length < feeds.length,
+    agent: "الجامع",
+    slug: "collector",
+    summary:
+      collected > 0
+        ? `جمع ${collected} عنصراً جديداً من ${feeds.length} مصدر (تجاهل ${skipped} مكرر/قديم).`
+        : `لا عناصر جديدة (فحص ${feeds.length} مصدر، تجاهل ${skipped}).`,
+    detail: { collected, skipped, feeds: feeds.length, errors },
+  };
 }
 
 /** MONITOR — triage new reports and surface stuck content. */
@@ -214,11 +269,21 @@ async function runResponder(): Promise<AgentTickResult> {
 }
 
 const RUNNERS: Record<string, () => Promise<AgentTickResult>> = {
+  collector: runCollector,
   monitor: runMonitor,
   verifier: runVerifier,
   writer: runWriter,
   publisher: runPublisher,
   responder: runResponder,
+};
+
+const ACTION_FOR: Record<string, string> = {
+  collector: "collect",
+  monitor: "triage",
+  verifier: "verify",
+  writer: "write",
+  publisher: "publish",
+  responder: "respond",
 };
 
 /** Execute one agent by slug (or id). Returns a structured tick result. */
@@ -241,13 +306,15 @@ export async function runAgent(slugOrId: string): Promise<AgentTickResult | null
   } catch (err) {
     result = { ok: false, agent: agent.name, slug: agent.slug, summary: `خطأ: ${(err as Error).message}` };
   }
-  await record(agent.id, agent.slug, runner === RUNNERS.monitor ? "triage" : "run", result);
+  await record(agent.id, agent.slug, ACTION_FOR[agent.slug] ?? "run", result);
   return result;
 }
 
-/** Run every ENABLED agent once (the autopilot tick). */
+/** Run every ENABLED agent once (the autopilot tick), in pipeline order. */
 export async function runAutopilot(): Promise<AgentTickResult[]> {
-  const agents = await prisma.agent.findMany({ where: { status: "ENABLED" }, orderBy: { createdAt: "asc" } });
+  const agents = await prisma.agent.findMany({ where: { status: "ENABLED" } });
+  const order = AGENT_CATALOG.map((d) => d.slug);
+  agents.sort((a, b) => order.indexOf(a.slug) - order.indexOf(b.slug));
   const results: AgentTickResult[] = [];
   for (const agent of agents) {
     const res = await runAgent(agent.slug);

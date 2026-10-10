@@ -134,6 +134,8 @@ model Report {
   title           String
   description     String
   mediaUrl        String?
+  sourceUrl       String? // original link when collected from an external source
+  origin          String? // e.g. "feed:google-news:تعز" | "manual"
   location        String?
   anonymous       Boolean      @default(false)
   reporterName    String?
@@ -315,6 +317,7 @@ enum AgentStatus {
 }
 
 enum AgentKind {
+  COLLECTOR // جامع المصادر والأخبار
   MONITOR // راصد المصادر والبلاغات
   VERIFIER // مدقق الحقائق آلياً
   WRITER // الصائغ الاحترافي

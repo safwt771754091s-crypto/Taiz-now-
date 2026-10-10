@@ -16,6 +16,19 @@ export type AgentDef = {
 
 export const AGENT_CATALOG: AgentDef[] = [
   {
+    slug: "collector",
+    name: "الجامع",
+    role: "جامع المصادر والأخبار",
+    kind: "COLLECTOR",
+    description:
+      "يجمع الأخبار والادعاءات الجديدة من المصادر العامة والروس (Google News وغيرها) ويدخلها كبلاغات قابلة للتحقق.",
+    capabilities: [
+      "سحب الأخبار من خلاصات RSS/Atom العامة مجاناً",
+      "إزالة التكرار قبل الإدخال",
+      "تسجيل رابط المصدر وأصله لكل بلاغ",
+    ],
+  },
+  {
     slug: "monitor",
     name: "الراصد",
     role: "راصد المصادر والبلاغات",
@@ -83,6 +96,7 @@ export const AGENT_CATALOG: AgentDef[] = [
 ];
 
 export const AGENT_KIND_LABELS: Record<AgentKind, string> = {
+  COLLECTOR: "جمع",
   MONITOR: "رصد",
   VERIFIER: "تحقق",
   WRITER: "صياغة",

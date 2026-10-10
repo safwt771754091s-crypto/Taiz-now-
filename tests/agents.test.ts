@@ -3,11 +3,50 @@ import { AGENT_CATALOG, AGENT_KIND_LABELS } from "@/lib/agents/catalog";
 import { PROVIDERS, PROVIDER_MAP, providerEnvPresent, resolveMode } from "@/lib/social/providers";
 import { draftRebuttal, writeProfessionally } from "@/lib/writer";
 import { draftSocialPosts } from "@/lib/ai";
+import { parseFeed, googleNewsFeedUrl, yemenFeeds } from "@/lib/agents/sources";
+
+describe("feed parser", () => {
+  const rss = `<?xml version="1.0"?><rss><channel>
+    <item><title>خبر أول</title><link>https://ex.test/1</link><description>ملخص أول</description><pubDate>Sat, 10 Oct 2026 08:15:45 GMT</pubDate></item>
+    <item><title>خبر ثانٍ</title><link>https://ex.test/2</link><description>&lt;p&gt;ملخص مُرمّز&lt;/p&gt;</description></item>
+  </channel></rss>`;
+
+  it("parses RSS items and decodes entities and html", () => {
+    const items = parseFeed(rss, "feed:test");
+    expect(items).toHaveLength(2);
+    expect(items[0].title).toBe("خبر أول");
+    expect(items[0].link).toBe("https://ex.test/1");
+    expect(items[1].summary).toBe("ملخص مُرمّز");
+    expect(items[0].source).toBe("feed:test");
+  });
+
+  it("parses Atom entries with href links", () => {
+    const atom = `<feed><entry><title>عنصر إخباري</title><link href="https://ex.test/a"/><summary>موجز</summary><updated>2026-10-10T10:00:00Z</updated></entry></feed>`;
+    const items = parseFeed(atom, "feed:atom");
+    expect(items).toHaveLength(1);
+    expect(items[0].link).toBe("https://ex.test/a");
+  });
+
+  it("builds a Yemeni-Arabic Google News query url", () => {
+    const url = googleNewsFeedUrl("تعز");
+    expect(url).toContain("news.google.com/rss/search");
+    expect(url).toContain("hl=ar");
+    expect(url).toContain(encodeURIComponent("تعز"));
+  });
+
+  it("uses env SOURCE_FEEDS when provided", () => {
+    process.env.SOURCE_FEEDS = "https://a.test/rss,https://b.test/rss";
+    const feeds = yemenFeeds();
+    expect(feeds).toHaveLength(2);
+    expect(feeds[0].label).toBe("feed:a.test");
+    delete process.env.SOURCE_FEEDS;
+  });
+});
 
 describe("agent catalog", () => {
-  it("defines the five core agents with unique slugs", () => {
+  it("defines the core agents with unique slugs", () => {
     const slugs = AGENT_CATALOG.map((a) => a.slug);
-    expect(slugs).toEqual(["monitor", "verifier", "writer", "publisher", "responder"]);
+    expect(slugs).toEqual(["collector", "monitor", "verifier", "writer", "publisher", "responder"]);
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
