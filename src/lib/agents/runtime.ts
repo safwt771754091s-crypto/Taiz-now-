@@ -6,6 +6,11 @@ import { publishContent, publishText } from "@/lib/social/connect";
 import { slugify } from "@/lib/slug";
 import { AGENT_CATALOG } from "./catalog";
 import { yemenFeeds, collectFeed } from "./sources";
+import { ensureSystemPages, checkPageIntegrity } from "@/lib/platform/pages";
+import { ensurePlatformEmails } from "@/lib/platform/email";
+import { getBrand } from "@/lib/platform/brand";
+import { runIntegrityScan, detectDrift } from "@/lib/security/config";
+import { recordSecurityEvent } from "@/lib/security/events";
 
 export type AgentTickResult = {
   agent: string;
@@ -268,7 +273,54 @@ async function runResponder(): Promise<AgentTickResult> {
   };
 }
 
+/**
+ * GUARDIAN — the platform's own caretaker. It (1) registers and re-syncs
+ * every page, (2) reconciles the platform email identity, and (3) scans for
+ * unauthorised changes to settings, brand, pages and channels. It never
+ * invents pages; it records and protects what the platform actually has.
+ */
+async function runGuardian(): Promise<AgentTickResult> {
+  // 1. Pages: register the code-known routes and detect any that drifted.
+  const registered = await ensureSystemPages();
+  const pageReport = await checkPageIntegrity(null);
+
+  // 2. Email identity: make sure the platform mailboxes exist and sync Google.
+  const brand = await getBrand();
+  await ensurePlatformEmails(brand.name);
+  const emailCount = await prisma.platformEmailAccount.count();
+
+  // 3. Settings drift: compare to the last approved baseline.
+  const drift = await detectDrift();
+
+  // 4. Security sweep: surface unresolved high-severity events for the log.
+  const openHigh = await prisma.securityEvent.count({
+    where: { resolved: false, severity: { in: ["HIGH", "CRITICAL"] } },
+  });
+
+  const summary =
+    `زامن ${registered} صفحة، ${emailCount} بريد، ` +
+    (drift.drifted ? `ورصد انحرافاً في الإعدادات (${drift.differences.length} فرق).` : "ولم يرصد أي انحراف في الإعدادات.");
+
+  return {
+    ok: true,
+    agent: "الحارس",
+    slug: "guardian",
+    summary,
+    detail: {
+      pagesRegistered: registered,
+      pagesTotal: pageReport.total,
+      missingSystemPages: pageReport.missingSystem,
+      emails: emailCount,
+      drift: drift.drifted,
+      differences: drift.differences,
+      baseline: drift.baselineHash,
+      openHighSeverity: openHigh,
+    },
+  };
+}
+
 const RUNNERS: Record<string, () => Promise<AgentTickResult>> = {
+  guardian: runGuardian,
   collector: runCollector,
   monitor: runMonitor,
   verifier: runVerifier,
@@ -278,6 +330,7 @@ const RUNNERS: Record<string, () => Promise<AgentTickResult>> = {
 };
 
 const ACTION_FOR: Record<string, string> = {
+  guardian: "guard",
   collector: "collect",
   monitor: "triage",
   verifier: "verify",

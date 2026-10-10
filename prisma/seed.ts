@@ -4,6 +4,9 @@ import { score } from "../src/lib/confidence";
 import { draftSocialPosts } from "../src/lib/ai";
 import { AGENT_CATALOG } from "../src/lib/agents/catalog";
 import { PROVIDERS } from "../src/lib/social/providers";
+import { getBrand, updateBrand } from "../src/lib/platform/brand";
+import { ensurePlatformEmails } from "../src/lib/platform/email";
+import { ensureSystemPages } from "../src/lib/platform/pages";
 
 const prisma = new PrismaClient();
 
@@ -302,7 +305,14 @@ async function main() {
     update: { email: "taiznow@gmail.com", connected: true, linkedVia: "google" },
   });
 
-  console.log("Seed complete: users, sources, content, markers, social drafts, agents, connections.");
+  // Platform brand + official mailboxes + page registry (idempotent).
+  const brand = await getBrand();
+  await updateBrand(brand, null);
+  await ensurePlatformEmails(brand.name);
+  const pageCount = await ensureSystemPages();
+  const emailCount = await prisma.platformEmailAccount.count();
+
+  console.log(`Seed complete: users, sources, content, markers, social drafts, agents, connections, ${pageCount} pages, ${emailCount} mailboxes.`);
 }
 
 main()

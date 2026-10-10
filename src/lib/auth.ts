@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@prisma/client";
 import { roleHasPermission, type Permission } from "@/lib/rbac";
+import { recordSecurityEvent } from "@/lib/security/events";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -27,9 +28,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user || !user.active) return null;
+        if (!user || !user.active) {
+          await recordSecurityEvent({
+            kind: "LOGIN_FAILED",
+            severity: "MEDIUM",
+            title: `محاولة دخول فاشلة للبريد ${email}`,
+            detail: { email, reason: !user ? "unknown-user" : "inactive" },
+          });
+          return null;
+        }
         const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return null;
+        if (!ok) {
+          await recordSecurityEvent({
+            kind: "LOGIN_FAILED",
+            severity: "HIGH",
+            title: `محاولة دخول فاشلة لكلمة مرور ${email}`,
+            detail: { email, userId: user.id },
+            subjectId: user.id,
+          });
+          return null;
+        }
         return {
           id: user.id,
           email: user.email,
