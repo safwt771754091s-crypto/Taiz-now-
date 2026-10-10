@@ -11,6 +11,7 @@ import { ensurePlatformEmails } from "@/lib/platform/email";
 import { getBrand } from "@/lib/platform/brand";
 import { runIntegrityScan, detectDrift } from "@/lib/security/config";
 import { recordSecurityEvent } from "@/lib/security/events";
+import { dispatchPendingAlerts } from "@/lib/security/alerts";
 
 export type AgentTickResult = {
   agent: string;
@@ -292,14 +293,18 @@ async function runGuardian(): Promise<AgentTickResult> {
   // 3. Settings drift: compare to the last approved baseline.
   const drift = await detectDrift();
 
-  // 4. Security sweep: surface unresolved high-severity events for the log.
+  // 4. Deliver any queued security alerts (email / webhook / inbox).
+  const delivery = await dispatchPendingAlerts();
+
+  // 5. Security sweep: surface unresolved high-severity events for the log.
   const openHigh = await prisma.securityEvent.count({
     where: { resolved: false, severity: { in: ["HIGH", "CRITICAL"] } },
   });
 
   const summary =
     `زامن ${registered} صفحة، ${emailCount} بريد، ` +
-    (drift.drifted ? `ورصد انحرافاً في الإعدادات (${drift.differences.length} فرق).` : "ولم يرصد أي انحراف في الإعدادات.");
+    (drift.drifted ? `ورصد انحرافاً في الإعدادات (${drift.differences.length} فرق). ` : "ولم يرصد أي انحراف في الإعدادات. ") +
+    (delivery.sent + delivery.skipped > 0 ? `وأرسل ${delivery.sent + delivery.skipped} تنبيهاً.` : "ولا تنبيهات معلّقة.");
 
   return {
     ok: true,
@@ -314,6 +319,7 @@ async function runGuardian(): Promise<AgentTickResult> {
       drift: drift.drifted,
       differences: drift.differences,
       baseline: drift.baselineHash,
+      alerts: delivery,
       openHighSeverity: openHigh,
     },
   };

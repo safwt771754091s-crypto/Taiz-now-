@@ -7,6 +7,7 @@ import { PROVIDERS } from "../src/lib/social/providers";
 import { getBrand, updateBrand } from "../src/lib/platform/brand";
 import { ensurePlatformEmails } from "../src/lib/platform/email";
 import { ensureSystemPages } from "../src/lib/platform/pages";
+import { platformAddress } from "../src/lib/platform/email";
 
 const prisma = new PrismaClient();
 
@@ -311,6 +312,19 @@ async function main() {
   await ensurePlatformEmails(brand.name);
   const pageCount = await ensureSystemPages();
   const emailCount = await prisma.platformEmailAccount.count();
+
+  // Default recovery channel = the platform's own security mailbox (idempotent).
+  if ((await prisma.recoveryChannel.count()) === 0) {
+    await prisma.recoveryChannel.create({
+      data: {
+        kind: "BACKUP_EMAIL",
+        label: "بريد المنصة الأمني",
+        value: platformAddress("SECURITY"),
+        verified: true,
+        primary: true,
+      },
+    });
+  }
 
   console.log(`Seed complete: users, sources, content, markers, social drafts, agents, connections, ${pageCount} pages, ${emailCount} mailboxes.`);
 }

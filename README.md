@@ -106,8 +106,17 @@
 - **مركز الأمن** `/security`: يكشف تغييرات الهوية والبُرد والصلاحيات وكلمات المرور
   والقنوات ومحاولات الدخول الفاشلة، ويقارن الإعدادات بـ«خط أساس معتمد» ويستعيده
   بضغطة واحدة عند الاختراق.
+- **تنبيهات فورية:** كل حدث بخطورة «مرتفع/حرج» (تغيير هوية، بريد، صفحة، صلاحية،
+  كلمة مرور، جهاز جديد، انحراف إعدادات) يُجدول تنبيهات تُسلَّم إلى قنوات الاسترجاع.
+  بلا SMTP تُحفظ الرسائل في «صندوق صادر» مرئي بدل فقدانها؛ و`SECURITY_WEBHOOK_URL`
+  يوجّه كل تنبيه إلى محادثة/Webhook.
+- **قنوات استرجاع:** بريد احتياطي/هاتف/TOTP من `/security` — تُقنَّع قيمها في الواجهة،
+  وتُستخدم مستقبلات للتنبيهات، وتُسجَّل إضافتها/حذفها كحدث أمني.
+- **سجل الدخول وكشف الأجهزة:** كل محاولة دخول تُسجَّل (IP/الجهاز/النتيجة)، والدخول
+  الناجح من جهاز أو موقع جديد يُرفع حدث «مرتفع» مع تنبيه.
 - **واجهات:** `GET/PATCH/POST /api/platform`, `/api/platform/email`, `/api/platform/pages`,
-  `GET/POST /api/security` (`scan` | `approve-baseline` | `restore` | `resolve`).
+  `GET/POST /api/security` (`scan` | `approve-baseline` | `restore` | `resolve` |
+  `dispatch-alerts` | `add-recovery` | `remove-recovery`).
 
 ## وسائل التواصل الاجتماعي
 
@@ -207,8 +216,8 @@ POST   /api/platform/pages          إنشاء صفحة /p/{slug} (platform:mana
 PUT    /api/platform/pages          مزامنة صفحات النظام (platform:manage)
 PATCH  /api/platform/pages          تعديل صفحة (platform:manage)
 DELETE /api/platform/pages?id=      حذف صفحة غير نظامية (platform:manage)
-GET    /api/security                الأحداث + الانحراف + خطوط الأساس (security:manage)
-POST   /api/security                فحص/اعتماد خط أساس/استعادة/معالجة (security:manage)
+GET    /api/security                الأحداث + الانحراف + التنبيهات + قنوات الاسترجاع + سجل الدخول (security:manage)
+POST   /api/security                فحص/اعتماد/استعادة/معالجة/إرسال تنبيهات/إدارة استرجاع (security:manage)
 ```
 
 ## التطوير

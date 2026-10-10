@@ -2,6 +2,7 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/auth";
 import { clientIp, fail, handleError, ok, writeAudit } from "@/lib/http";
 import { connectProvider } from "@/lib/social/connect";
+import { recordSecurityEvent } from "@/lib/security/events";
 
 const schema = z.object({
   action: z.enum(["connect", "disconnect"]).default("connect"),
@@ -27,6 +28,13 @@ export async function POST(req: Request) {
         data: { enabled: false },
       });
       await writeAudit({ actorId: user?.id, action: "social.disconnect", entityType: "SocialConnection", entityId: conn.id, ip: clientIp(req) });
+      await recordSecurityEvent({
+        kind: "CONNECTION_CHANGE",
+        severity: "HIGH",
+        title: `فصل قناة التواصل ${data.provider}`,
+        detail: { provider: data.provider, action: "disconnect" },
+        actorId: user?.id,
+      });
       return ok(conn);
     }
 
@@ -39,6 +47,13 @@ export async function POST(req: Request) {
         entityId: conn.id,
         detail: { provider: conn.provider, mode: conn.mode },
         ip: clientIp(req),
+      });
+      await recordSecurityEvent({
+        kind: "CONNECTION_CHANGE",
+        severity: conn.enabled ? "MEDIUM" : "HIGH",
+        title: `${conn.enabled ? "تمكين" : "تعطيل"} قناة ${conn.provider}`,
+        detail: { provider: conn.provider, enabled: conn.enabled, mode: conn.mode },
+        actorId: user?.id,
       });
       return ok(conn);
     } catch (e) {

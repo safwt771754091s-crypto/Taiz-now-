@@ -4,6 +4,9 @@ import { platformAddress, platformDomain, EMAIL_PREFIXES } from "@/lib/platform/
 import { SYSTEM_PAGES, PAGE_KIND_LABELS } from "@/lib/platform/pages";
 import { AGENT_CATALOG, AGENT_KIND_LABELS } from "@/lib/agents/catalog";
 import { SEVERITY_LABELS, SEVERITY_ORDER } from "@/lib/security/events";
+import { shouldAlert } from "@/lib/security/alerts";
+import { maskValue, RECOVERY_KIND_LABELS } from "@/lib/security/recovery";
+
 
 describe("config integrity hashing", () => {
   it("is deterministic regardless of object key order", () => {
@@ -66,5 +69,44 @@ describe("security severity scale", () => {
   it("orders severities and labels them", () => {
     expect(SEVERITY_ORDER).toEqual(["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"]);
     for (const s of SEVERITY_ORDER) expect(SEVERITY_LABELS[s]).toBeTruthy();
+  });
+});
+
+describe("security alert policy", () => {
+  it("alerts only for high/critical security-relevant kinds", () => {
+    expect(shouldAlert("BRAND_CHANGE", "HIGH")).toBe(true);
+    expect(shouldAlert("PASSWORD_CHANGE", "CRITICAL")).toBe(true);
+    expect(shouldAlert("CONFIG_DRIFT", "HIGH")).toBe(true);
+    expect(shouldAlert("NEW_DEVICE", "HIGH")).toBe(true);
+  });
+
+  it("stays quiet for low severity or routine kinds", () => {
+    expect(shouldAlert("BRAND_CHANGE", "MEDIUM")).toBe(false);
+    expect(shouldAlert("INTEGRITY_OK", "CRITICAL")).toBe(false);
+    expect(shouldAlert("LOGIN_FAILED", "INFO")).toBe(false);
+  });
+});
+
+describe("recovery channels", () => {
+  it("masks backup email local part", () => {
+    expect(maskValue("BACKUP_EMAIL", "owner@taiznow.ye")).toBe("ow•••@taiznow.ye");
+  });
+
+  it("masks phone numbers keeping the last four digits", () => {
+    expect(maskValue("PHONE", "+967 712 345 678")).toBe("•••• 5678");
+  });
+
+  it("labels every recovery kind", () => {
+    for (const k of ["BACKUP_EMAIL", "PHONE", "TOTP"] as const) {
+      expect(RECOVERY_KIND_LABELS[k]).toBeTruthy();
+    }
+  });
+});
+
+describe("security alert email", () => {
+  it("exposes a mail sender without throwing on import", async () => {
+    const mod = await import("@/lib/security/mail");
+    expect(typeof mod.sendMail).toBe("function");
+    expect(typeof mod.renderSecurityEmail).toBe("function");
   });
 });

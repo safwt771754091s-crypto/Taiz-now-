@@ -98,6 +98,8 @@ model User {
   mediaReviewed    MediaAsset[]
   auditLogs        AuditLog[]
   confidenceAudits ConfidenceRecord[]
+  recoveryChannels RecoveryChannel[]
+  loginEvents      LoginEvent[]
 }
 
 model Permission {
@@ -505,4 +507,71 @@ model ConfigSnapshot {
   createdAt  DateTime @default(now())
 
   @@index([scope, createdAt])
+}
+
+// ─── Security alerting & account recovery (تنبيهات الأمن وقناة الاسترجاع) ──────
+enum AlertChannel {
+  EMAIL
+  WEBHOOK
+  INBOX
+}
+
+enum AlertDelivery {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model SecurityAlert {
+  id             String          @id @default(cuid())
+  channel        AlertChannel
+  recipient      String
+  subject        String
+  body           String
+  severity       SecuritySeverity @default(INFO)
+  status         AlertDelivery   @default(PENDING)
+  error          String?
+  securityEventId String?
+  createdAt      DateTime        @default(now())
+  sentAt         DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum RecoveryChannelKind {
+  BACKUP_EMAIL
+  PHONE
+  TOTP
+}
+
+model RecoveryChannel {
+  id          String               @id @default(cuid())
+  kind        RecoveryChannelKind
+  label       String
+  value       String // البريد الاحتياطي أو الرقم (يُخزّن مختصراً/masked في الواجهة)
+  userId      String?
+  user        User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  verified    Boolean              @default(false)
+  primary     Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([userId])
+}
+
+model LoginEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email      String
+  ok         Boolean
+  ip         String?
+  userAgent  String?
+  fingerprint String? // ip+ua hash — للكشف عن جهاز/موقع جديد
+  createdAt  DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([fingerprint])
 }
