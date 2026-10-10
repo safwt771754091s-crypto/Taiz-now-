@@ -42,8 +42,16 @@ export async function listContent(opts: {
 }
 
 export async function getContentBySlug(slug: string) {
+  // Next.js may hand us a percent-encoded path segment; decode it so non-Latin
+  // (Arabic) slugs stored raw in the database still resolve.
+  let decoded = slug;
+  try {
+    decoded = decodeURIComponent(slug);
+  } catch {
+    decoded = slug;
+  }
   return prisma.contentItem.findUnique({
-    where: { slug },
+    where: { slug: decoded },
     include: {
       evidence: { include: { source: true } },
       scores: { orderBy: { computedAt: "desc" }, take: 1 },

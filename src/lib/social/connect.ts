@@ -13,7 +13,9 @@ export type PublishOutcome = {
 };
 
 function baseUrl() {
-  return process.env.NEXTAUTH_URL?.replace(/\/$/, "") || "http://localhost:12000";
+  const configured = process.env.PLATFORM_URL || process.env.NEXTAUTH_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  return "https://taiznow.ye";
 }
 
 /** Ensure all known providers exist as connections and identities (idempotent). */

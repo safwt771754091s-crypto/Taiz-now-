@@ -243,7 +243,11 @@ export function draftSocialPosts(input: {
   slug: string;
   baseUrl?: string;
 }): { platform: string; body: string }[] {
-  const url = `${input.baseUrl ?? "https://taiz-now.example"}/news/${input.slug}`;
+  const publicBase =
+    process.env.PLATFORM_URL?.replace(/\/$/, "") ||
+    process.env.NEXTAUTH_URL?.replace(/\/$/, "") ||
+    "https://taiznow.ye";
+  const url = `${input.baseUrl?.replace(/\/$/, "") ?? publicBase}/news/${input.slug}`;
   const tag = "#اليمن #تعز #التحقق_الذكي";
   const lead = `${input.title}\n\n${input.summary}`;
   const trust = `درجة الثقة: ${input.confidence}/100 (${input.verdictLabel})`;

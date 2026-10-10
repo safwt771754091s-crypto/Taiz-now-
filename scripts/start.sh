@@ -25,7 +25,7 @@ fi
 # Start the Next.js server if it is not already listening.
 if ! (ss -ltn 2>/dev/null | grep -q ":${PORT} "); then
   echo "[start] Starting Next.js on port ${PORT}..."
-  PORT="$PORT" nohup npx next start -p "$PORT" > "$LOG_DIR/app.log" 2>&1 &
+  PORT="$PORT" nohup env -u NEXTAUTH_URL -u NEXTAUTH_URL_INTERNAL -u PLATFORM_URL -u OPENAI_API_KEY npx next start -p "$PORT" > "$LOG_DIR/app.log" 2>&1 &
   echo $! > "$LOG_DIR/app.pid"
 fi
 
