@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+:root {
+  --background: #070b14;
+  --foreground: #e8eef7;
+  --panel: #0f1626;
+  --panel-2: #141d31;
+  --border: #22304d;
+  --brand: #2dd4bf;
+  --brand-2: #0ea5e9;
+  --muted: #8fa1bf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel-2);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand2: var(--brand-2);
+  --color-muted: var(--muted);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 100% -10%, rgba(14, 165, 233, 0.12), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(45, 212, 191, 0.1), transparent 55%),
+    var(--background);
+  color: var(--foreground);
+  font-family: "Segoe UI", Tahoma, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  min-height: 100vh;
+}
+
+.card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+}
+
+input,
+textarea,
+select {
+  background: #0b1220;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  width: 100%;
+  color: var(--foreground);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+button {
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #041018;
+  font-weight: 700;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+a {
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #24324f;
+  border-radius: 999px;
+}
