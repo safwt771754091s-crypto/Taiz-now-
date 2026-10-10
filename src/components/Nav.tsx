@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/corrections", label: "التصحيحات" },
   { href: "/reports", label: "البلاغات" },
   { href: "/maps", label: "الخرائط" },
+  { href: "/agents", label: "الوكلاء" },
   { href: "/dashboard", label: "لوحة التحكم" },
 ];
 

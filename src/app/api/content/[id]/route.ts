@@ -18,7 +18,7 @@ const patchSchema = z.object({
 });
 
 const actionSchema = z.object({
-  action: z.enum(["verify", "publish", "retract", "draft-social"]),
+  action: z.enum(["verify", "publish", "retract", "draft-social", "polish"]),
   signals: z
     .object({
       source: z.number().min(0).max(100),
@@ -195,6 +195,34 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         ip: clientIp(req),
       });
       return ok(updated);
+    }
+
+    // polish — professionally rewrite a verified item via the Writer agent
+    if (body.action === "polish") {
+      const user = await requirePermission("content:edit");
+      const { writeProfessionally } = await import("@/lib/writer");
+      const piece = await writeProfessionally({
+        title: item.title,
+        summary: item.summary,
+        body: item.body,
+        verdictLabel: VERDICT_LABELS[item.verdict] ?? "",
+        confidence: item.confidence,
+        location: item.location,
+        sources: item.evidence.map((e) => e.title),
+      });
+      const updated = await prisma.contentItem.update({
+        where: { id: item.id },
+        data: { body: piece.body },
+      });
+      await writeAudit({
+        actorId: user?.id,
+        action: "content.polish",
+        entityType: "ContentItem",
+        entityId: item.id,
+        detail: { aiGenerated: piece.aiGenerated, model: piece.model },
+        ip: clientIp(req),
+      });
+      return ok({ item: updated, piece });
     }
 
     // draft-social

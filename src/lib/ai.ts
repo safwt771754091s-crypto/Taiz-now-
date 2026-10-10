@@ -206,6 +206,34 @@ export function analyzeMetadata(
   };
 }
 
+/**
+ * Full media analysis combining metadata heuristics with terse reporting.
+ * No external vision model is required; findings are advisory.
+ */
+export function analysisFromMedia(
+  kind: "image" | "video",
+  meta: Record<string, unknown> | null | undefined,
+): MediaAnalysis {
+  const base = analyzeMetadata(kind, meta);
+  const findings = [...base.findings];
+  const flags = [...base.flags];
+  const software = String(meta?.Software ?? meta?.software ?? "");
+  const hasGeo = Boolean(meta?.GPSLatitude || meta?.latitude || meta?.gpsLat || meta?.location);
+  const captured = Boolean(meta?.DateTimeOriginal || meta?.CreateDate);
+
+  if (!captured) flags.push("لا يوجد تاريخ التقاط — يصعب التحقق الزمني");
+  if (kind === "video" && base.deepfakeProbability !== null) {
+    if (/(deepfake|face swap|synthesia|heygen)/i.test(software)) {
+      flags.push("مؤشرات على معالجة صوت/وجه اصطناعية");
+    } else {
+      findings.push("لم تُرصد مؤشرات واضحة على التزييف العميق في البيانات الوصفية");
+    }
+  }
+  if (hasGeo) findings.push("المكان قابل للتحقق جغرافياً من البيانات الوصفية");
+
+  return { ...base, findings, flags, model: "offline-media" };
+}
+
 /** Generate ready-to-publish social posts for each platform from a content item. */
 export function draftSocialPosts(input: {
   title: string;

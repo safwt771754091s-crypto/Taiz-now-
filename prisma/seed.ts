@@ -2,6 +2,8 @@ import { PrismaClient, type Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { score } from "../src/lib/confidence";
 import { draftSocialPosts } from "../src/lib/ai";
+import { AGENT_CATALOG } from "../src/lib/agents/catalog";
+import { PROVIDERS } from "../src/lib/social/providers";
 
 const prisma = new PrismaClient();
 
@@ -253,7 +255,54 @@ async function main() {
     });
   }
 
-  console.log("Seed complete: users, sources, content, markers, social drafts.");
+  // AI agent catalog + platform social identities (idempotent, no network calls).
+  for (const def of AGENT_CATALOG) {
+    await prisma.agent.upsert({
+      where: { slug: def.slug },
+      create: {
+        slug: def.slug,
+        name: def.name,
+        role: def.role,
+        kind: def.kind,
+        description: def.description,
+        config: { capabilities: def.capabilities },
+      },
+      update: {
+        name: def.name,
+        role: def.role,
+        kind: def.kind,
+        description: def.description,
+        config: { capabilities: def.capabilities },
+      },
+    });
+  }
+
+  for (const def of PROVIDERS) {
+    await prisma.socialConnection.upsert({
+      where: { provider: def.provider },
+      create: {
+        provider: def.provider,
+        displayName: def.label,
+        mode: "MOCK",
+        enabled: true,
+        handle: `${def.handlePrefix}taiznow`,
+        accountName: "تعز الآن",
+      },
+      update: { displayName: def.label },
+    });
+    await prisma.platformIdentity.upsert({
+      where: { provider: def.provider },
+      create: { provider: def.provider, handle: `${def.handlePrefix}taiznow` },
+      update: {},
+    });
+  }
+  await prisma.platformIdentity.upsert({
+    where: { provider: "google" },
+    create: { provider: "google", email: "taiznow@gmail.com", handle: "taiznow", connected: true, linkedVia: "google" },
+    update: { email: "taiznow@gmail.com", connected: true, linkedVia: "google" },
+  });
+
+  console.log("Seed complete: users, sources, content, markers, social drafts, agents, connections.");
 }
 
 main()

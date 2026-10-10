@@ -1,0 +1,225 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+
+type Connection = {
+  id: string;
+  provider: string;
+  displayName: string;
+  mode: "MOCK" | "LIVE";
+  enabled: boolean;
+  handle: string | null;
+  accountName: string | null;
+  postCount: number;
+  errorCount: number;
+  lastPostedAt: string | null;
+};
+
+type Identity = {
+  id: string;
+  provider: string;
+  handle: string | null;
+  email: string | null;
+  connected: boolean;
+  linkedVia: string | null;
+};
+
+function fmt(dt: string | null) {
+  if (!dt) return "—";
+  return new Date(dt).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" });
+}
+
+export default function SocialConsole() {
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [identities, setIdentities] = useState<Identity[]>([]);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [googleEmail, setGoogleEmail] = useState("taiznow@gmail.com");
+  const [post, setPost] = useState({ title: "", body: "" });
+
+  const load = useCallback(async () => {
+    const res = await fetch("/api/social");
+    const json = await res.json();
+    if (res.ok) {
+      setConnections(json.data.connections);
+      setIdentities(json.data.identities);
+    } else {
+      setErr(json.error ?? "تعذر تحميل القنوات");
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function toggle(id: string, enabled: boolean) {
+    setBusy(id);
+    await fetch(`/api/social/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    setBusy(null);
+    load();
+  }
+
+  async function connect(provider: string) {
+    setBusy(provider);
+    setMsg(null);
+    setErr(null);
+    const res = await fetch("/api/social/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "connect", provider }),
+    });
+    const json = await res.json();
+    if (!res.ok) setErr(json.error ?? "تعذر الربط");
+    else setMsg(`تم ربط ${json.data.displayName} (${json.data.mode}).`);
+    setBusy(null);
+    load();
+  }
+
+  async function linkGoogle() {
+    setBusy("google");
+    setMsg(null);
+    setErr(null);
+    const res = await fetch("/api/social/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: googleEmail }),
+    });
+    const json = await res.json();
+    if (!res.ok) setErr(json.error ?? "تعذر ربط حساب جوجل");
+    else setMsg("تم ربط حساب جوجل وربط القنوات المرتبطة به.");
+    setBusy(null);
+    load();
+  }
+
+  async function publishText(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy("publish");
+    setMsg(null);
+    setErr(null);
+    const res = await fetch("/api/social/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "publish-text", ...post }),
+    });
+    const json = await res.json();
+    if (!res.ok) setErr(json.error ?? "تعذر النشر");
+    else {
+      const okCount = json.data.outcomes.filter((o: { ok: boolean }) => o.ok).length;
+      setMsg(`تم النشر على ${okCount} قناة.`);
+      setPost({ title: "", body: "" });
+    }
+    setBusy(null);
+    load();
+  }
+
+  const google = identities.find((i) => i.provider === "google");
+
+  return (
+    <div className="space-y-6">
+      <section className="card space-y-4 p-5">
+        <h2 className="text-lg font-bold">حساب المنصة على جوجل</h2>
+        <p className="text-sm text-[var(--muted)]">
+          ربط حساب جوجل يمهّد لربط القنوات المرتبطة به (مثل يوتيوب) وإدارتها من مكان واحد.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="space-y-1 text-sm">
+            <span className="font-bold">بريد حساب جوجل</span>
+            <input type="email" value={googleEmail} onChange={(e) => setGoogleEmail(e.target.value)} />
+          </label>
+          <button
+            onClick={linkGoogle}
+            disabled={busy !== null}
+            className="btn-primary rounded-xl px-5 py-2.5 disabled:opacity-50"
+          >
+            {busy === "google" ? "جارٍ الربط..." : "ربط حساب جوجل"}
+          </button>
+          {google?.connected && (
+            <span className="chip border-emerald-400/40 text-emerald-300">
+              مربوط: {google.email ?? google.handle}
+            </span>
+          )}
+        </div>
+      </section>
+
+      {msg && <p className="card p-3 text-sm text-emerald-300">{msg}</p>}
+      {err && <p className="card p-3 text-sm text-rose-300">{err}</p>}
+
+      <section className="card overflow-x-auto p-5">
+        <h2 className="mb-3 text-lg font-bold">قنوات النشر</h2>
+        <table className="w-full text-right text-sm">
+          <thead className="text-[var(--muted)]">
+            <tr>
+              <th className="p-2">المنصة</th>
+              <th className="p-2">الحساب</th>
+              <th className="p-2">النمط</th>
+              <th className="p-2">المنشورات</th>
+              <th className="p-2">آخر نشر</th>
+              <th className="p-2">الحالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {connections.map((c) => (
+              <tr key={c.id} className="border-t border-[var(--border)]">
+                <td className="p-2 font-bold">{c.displayName}</td>
+                <td className="p-2 text-[var(--muted)]">{c.handle ?? "—"}</td>
+                <td className="p-2">
+                  <span className={`chip ${c.mode === "LIVE" ? "text-emerald-300" : "text-amber-300"}`}>
+                    {c.mode === "LIVE" ? "مباشر" : "محاكاة"}
+                  </span>
+                </td>
+                <td className="p-2">{c.postCount}</td>
+                <td className="p-2 text-xs text-[var(--muted)]">{fmt(c.lastPostedAt)}</td>
+                <td className="p-2">
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      onClick={() => toggle(c.id, !c.enabled)}
+                      disabled={busy !== null}
+                      className={`chip ${c.enabled ? "text-emerald-300" : "text-[var(--muted)]"}`}
+                    >
+                      {c.enabled ? "مفعّلة" : "معطّلة"}
+                    </button>
+                    {c.mode === "MOCK" && (
+                      <button onClick={() => connect(c.provider)} className="chip text-brand">
+                        ربط مباشر
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          وضع المحاكاة يسجّل المنشورات محلياً دون شبكة. لإتاحة النشر المباشر أضف مفاتيح كل منصة في متغيرات البيئة.
+        </p>
+      </section>
+
+      <section className="card space-y-3 p-5">
+        <h2 className="text-lg font-bold">نشر بيان/ردّ مباشر</h2>
+        <form onSubmit={publishText} className="space-y-3">
+          <input
+            required
+            placeholder="العنوان"
+            value={post.title}
+            onChange={(e) => setPost({ ...post, title: e.target.value })}
+          />
+          <textarea
+            required
+            rows={5}
+            placeholder="نص البيان..."
+            value={post.body}
+            onChange={(e) => setPost({ ...post, body: e.target.value })}
+          />
+          <button disabled={busy !== null} className="btn-primary rounded-xl px-6 py-2.5 disabled:opacity-50">
+            {busy === "publish" ? "جارٍ النشر..." : "نشر على كل القنوات المفعّلة"}
+          </button>
+        </form>
+      </section>
+    </div>
+  );
+}

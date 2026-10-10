@@ -57,6 +57,16 @@ export default async function Dashboard() {
           {roleHasPermission(role, "report:triage") && (
             <span className="chip border-brand/40 text-brand">فرز البلاغات متاح</span>
           )}
+          {roleHasPermission(role, "agents:manage") && (
+            <Link href="/agents" className="chip border-brand/40 text-brand">
+              الوكلاء الأذكياء
+            </Link>
+          )}
+          {roleHasPermission(role, "social:manage") && (
+            <Link href="/social" className="chip border-brand/40 text-brand">
+              وسائل التواصل
+            </Link>
+          )}
           {roleHasPermission(role, "users:manage") && (
             <Link href="/admin" className="chip border-brand/40 text-brand">
               إدارة المستخدمين

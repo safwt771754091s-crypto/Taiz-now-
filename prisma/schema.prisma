@@ -91,10 +91,10 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  reportsAuthored  Report[]        @relation("ReportReporter")
-  reportsAssigned  Report[]        @relation("ReportAssignee")
-  newsCreated      ContentItem[]   @relation("ContentCreator")
-  newsReviewed     ContentItem[]   @relation("ContentReviewer")
+  reportsAuthored  Report[]           @relation("ReportReporter")
+  reportsAssigned  Report[]           @relation("ReportAssignee")
+  newsCreated      ContentItem[]      @relation("ContentCreator")
+  newsReviewed     ContentItem[]      @relation("ContentReviewer")
   mediaReviewed    MediaAsset[]
   auditLogs        AuditLog[]
   confidenceAudits ConfidenceRecord[]
@@ -144,9 +144,9 @@ model Report {
   updatedAt       DateTime     @updatedAt
 
   reporterId   String?
-  reporter     User?    @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  reporter     User?   @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
   assignedToId String?
-  assignedTo   User?    @relation("ReportAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedTo   User?   @relation("ReportAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   media    MediaAsset[]
   evidence Evidence[]
@@ -189,13 +189,13 @@ model ContentItem {
 }
 
 model Evidence {
-  id            String       @id @default(cuid())
-  type          EvidenceType
-  title         String
-  url           String?
-  note          String?
-  weight        Int          @default(0) // contribution to confidence (0-100 signal)
-  createdAt     DateTime     @default(now())
+  id        String       @id @default(cuid())
+  type      EvidenceType
+  title     String
+  url       String?
+  note      String?
+  weight    Int          @default(0) // contribution to confidence (0-100 signal)
+  createdAt DateTime     @default(now())
 
   sourceId      String?
   source        Source?      @relation(fields: [sourceId], references: [id], onDelete: SetNull)
@@ -232,21 +232,21 @@ model ConfidenceRecord {
 }
 
 model MediaAsset {
-  id           String      @id @default(cuid())
-  kind         MediaKind
-  url          String
-  mimeType     String?
-  byteSize     Int?
-  capturedAt   DateTime?
-  gpsLat       Float?
-  gpsLng       Float?
-  device       String?
-  metadata     Json?
+  id                     String      @id @default(cuid())
+  kind                   MediaKind
+  url                    String
+  mimeType               String?
+  byteSize               Int?
+  capturedAt             DateTime?
+  gpsLat                 Float?
+  gpsLng                 Float?
+  device                 String?
+  metadata               Json?
   // analysis signals
   aiGeneratedProbability Float? // 0-1, probability the image is AI-generated
   deepfakeProbability    Float? // 0-1, probability the video audio/visual is synthetic
   reverseSearchHits      Int? // number of earlier occurrences found
-  geoVerified            Boolean  @default(false)
+  geoVerified            Boolean     @default(false)
   analysisNotes          String?
   status                 MediaStatus @default(PENDING)
   createdAt              DateTime    @default(now())
@@ -279,12 +279,12 @@ model MapMarker {
 }
 
 model SocialPost {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   platform    String // facebook | x | instagram | telegram | website
-  body        String   @db.Text
-  status      String   @default("draft") // draft | scheduled | published
+  body        String    @db.Text
+  status      String    @default("draft") // draft | scheduled | published
   publishedAt DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   contentItemId String
   contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
@@ -305,4 +305,85 @@ model AuditLog {
   actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
+}
+
+// ─── AI Agents (وكلاء الذكاء الاصطناعي) ──────────────────────────────────────
+enum AgentStatus {
+  ENABLED // مفعّل
+  PAUSED // متوقف مؤقتاً
+  DISABLED // معطّل
+}
+
+enum AgentKind {
+  MONITOR // راصد المصادر والبلاغات
+  VERIFIER // مدقق الحقائق آلياً
+  WRITER // الصائغ الاحترافي
+  PUBLISHER // الناشر في وسائل التواصل
+  RESPONDER // الردّ على الأخبار الكاذبة
+}
+
+model Agent {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  name        String
+  role        String
+  description String
+  kind        AgentKind
+  status      AgentStatus @default(ENABLED)
+  config      Json?
+  runCount    Int         @default(0)
+  errorCount  Int         @default(0)
+  lastRunAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  runs AgentRun[]
+
+  @@index([kind])
+}
+
+model AgentRun {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  action    String
+  status    String   @default("ok") // ok | error
+  summary   String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([agentId])
+  @@index([createdAt])
+}
+
+// ─── Social Media Integrations (وسائل التواصل) ────────────────────────────────
+enum ConnectionMode {
+  MOCK // محاكاة — النشر يُسجّل محلياً
+  LIVE // مباشر — إعدادات حقيقية مهيأة
+}
+
+model PlatformIdentity {
+  id        String   @id @default(cuid())
+  provider  String   @unique // google | facebook | x | instagram | telegram | whatsapp | linkedin | tiktok | youtube
+  handle    String?
+  email     String?
+  connected Boolean  @default(false)
+  linkedVia String?
+  updatedAt DateTime @updatedAt
+}
+
+model SocialConnection {
+  id           String         @id @default(cuid())
+  provider     String         @unique
+  displayName  String
+  mode         ConnectionMode @default(MOCK)
+  enabled      Boolean        @default(true)
+  handle       String?
+  accountName  String?
+  credentials  Json?
+  lastPostedAt DateTime?
+  postCount    Int            @default(0)
+  errorCount   Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 }

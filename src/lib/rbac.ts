@@ -41,6 +41,7 @@ export const PERMISSIONS = [
   "media:analyze",
   "geo:verify",
   "social:manage",
+  "agents:manage",
   "users:manage",
   "audit:view",
 ] as const;
@@ -74,14 +75,17 @@ const SOCIAL_PUBLISHER_PERMS: Permission[] = [
 
 const OWNER_PERMS: Permission[] = [...PERMISSIONS];
 
+/** Agents run the editorial pipeline; the roles that own that work may manage them. */
+const AGENT_MANAGER_PERMS: Permission[] = ["agents:manage"];
+
 /** Server-side source of truth for role → permission mapping. */
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   OWNER: OWNER_PERMS,
-  EDITOR: EDITOR_PERMS,
-  FACT_CHECKER: FACT_CHECKER_PERMS,
+  EDITOR: [...EDITOR_PERMS, ...AGENT_MANAGER_PERMS],
+  FACT_CHECKER: [...FACT_CHECKER_PERMS, ...AGENT_MANAGER_PERMS],
   MEDIA_ANALYST: MEDIA_ANALYST_PERMS,
   GEO_ANALYST: GEO_ANALYST_PERMS,
-  SOCIAL_PUBLISHER: SOCIAL_PUBLISHER_PERMS,
+  SOCIAL_PUBLISHER: [...SOCIAL_PUBLISHER_PERMS, ...AGENT_MANAGER_PERMS],
   VIEWER: VIEWER_PERMS,
 };
 
@@ -104,6 +108,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "media:analyze": "تحليل الوسائط",
   "geo:verify": "التحقق الجغرافي",
   "social:manage": "إدارة النشر الاجتماعي",
+  "agents:manage": "إدارة الوكلاء الأذكياء",
   "users:manage": "إدارة المستخدمين",
   "audit:view": "عرض سجل التدقيق",
 };

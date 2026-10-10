@@ -36,4 +36,11 @@ if [ ! -f "$LOG_DIR/watchdog.pid" ] || ! kill -0 "$(cat "$LOG_DIR/watchdog.pid" 
   echo $! > "$LOG_DIR/watchdog.pid"
 fi
 
+# Start the AI agent autopilot loop if not already running.
+if [ ! -f "$LOG_DIR/autopilot.pid" ] || ! kill -0 "$(cat "$LOG_DIR/autopilot.pid" 2>/dev/null)" 2>/dev/null; then
+  echo "[start] Starting autopilot loop..."
+  nohup bash "$ROOT/scripts/autopilot_loop.sh" > "$LOG_DIR/autopilot_loop.log" 2>&1 &
+  echo $! > "$LOG_DIR/autopilot.pid"
+fi
+
 echo "[start] Done. App: http://localhost:${PORT}"
