@@ -1,0 +1,392 @@
+// Taiz Now — Smart Verification Platform (منصة التحقق الذكي)
+// Prisma schema — PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER // مسؤول — full platform administration
+  EDITOR // محرر — content & news management
+  FACT_CHECKER // مدقق الحقائق — verify news & claims
+  MEDIA_ANALYST // محلل إعلامي — image/video analysis
+  GEO_ANALYST // محلل جغرافي — geo & maps verification
+  SOCIAL_PUBLISHER // الناشر الاجتماعي — social distribution
+  VIEWER // مشاهد — read only
+}
+
+enum ReportType {
+  NEWS
+  IMAGE
+  VIDEO
+  MESSAGE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING // جديد
+  UNDER_REVIEW // قيد المراجعة
+  VERIFIED // تم التحقق
+  REJECTED // مرفوض
+  DUPLICATE // مكرر
+}
+
+enum ContentStatus {
+  DRAFT // مسودة
+  IN_REVIEW // قيد المراجعة
+  VERIFIED // موثق
+  PUBLISHED // منشور
+  REJECTED // مرفوض
+  RETRACTED // مسحوب
+}
+
+enum ContentKind {
+  NEWS // خبر
+  RUMOR // شائعة
+  CORRECTION // تصحيح
+}
+
+enum Verdict {
+  TRUE // صحيح
+  MOSTLY_TRUE // صحيح غالباً
+  MISLEADING // مضلل
+  SUSPICIOUS // مشبوه
+  FALSE // غير صحيح
+  UNVERIFIED // غير متحقق
+}
+
+enum EvidenceType {
+  SOURCE // مصدر
+  DOCUMENT // وثيقة
+  IMAGE // صورة
+  VIDEO // فيديو
+  GEO // دليل جغرافي
+  EXPERT // رأي خبير
+}
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+  MESSAGE
+}
+
+enum MediaStatus {
+  PENDING
+  ANALYZED
+  REVIEWED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(VIEWER)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportsAuthored  Report[]           @relation("ReportReporter")
+  reportsAssigned  Report[]           @relation("ReportAssignee")
+  newsCreated      ContentItem[]      @relation("ContentCreator")
+  newsReviewed     ContentItem[]      @relation("ContentReviewer")
+  mediaReviewed    MediaAsset[]
+  auditLogs        AuditLog[]
+  confidenceAudits ConfidenceRecord[]
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  description String
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  role         Role
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId String
+
+  @@unique([role, permissionId])
+}
+
+model Source {
+  id          String   @id @default(cuid())
+  name        String
+  url         String?
+  type        String   @default("media") // media | official | eyewitness | social | archive
+  reliability Int      @default(50) // 0-100 baseline trust in the source
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  evidence Evidence[]
+}
+
+model Report {
+  id              String       @id @default(cuid())
+  type            ReportType   @default(NEWS)
+  title           String
+  description     String
+  mediaUrl        String?
+  sourceUrl       String? // original link when collected from an external source
+  origin          String? // e.g. "feed:google-news:تعز" | "manual"
+  location        String?
+  anonymous       Boolean      @default(false)
+  reporterName    String?
+  reporterContact String?
+  status          ReportStatus @default(PENDING)
+  priority        Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  reporterId   String?
+  reporter     User?   @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  assignedToId String?
+  assignedTo   User?   @relation("ReportAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  media    MediaAsset[]
+  evidence Evidence[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model ContentItem {
+  id             String        @id @default(cuid())
+  kind           ContentKind
+  slug           String        @unique
+  title          String
+  summary        String
+  body           String        @db.Text
+  status         ContentStatus @default(DRAFT)
+  verdict        Verdict       @default(UNVERIFIED)
+  confidence     Int           @default(0)
+  claim          String? // the exact claim being checked (for rumors)
+  correctionNote String? // what was corrected (for corrections)
+  location       String?
+  tags           String[]      @default([])
+  publishedAt    DateTime?
+  lastReviewedAt DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  createdById  String?
+  createdBy    User?   @relation("ContentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  reviewedById String?
+  reviewedBy   User?   @relation("ContentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  evidence    Evidence[]
+  scores      ConfidenceRecord[]
+  media       MediaAsset[]
+  markers     MapMarker[]
+  socialPosts SocialPost[]
+
+  @@index([kind, status])
+}
+
+model Evidence {
+  id        String       @id @default(cuid())
+  type      EvidenceType
+  title     String
+  url       String?
+  note      String?
+  weight    Int          @default(0) // contribution to confidence (0-100 signal)
+  createdAt DateTime     @default(now())
+
+  sourceId      String?
+  source        Source?      @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  contentItemId String?
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  reportId      String?
+  report        Report?      @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId])
+  @@index([reportId])
+}
+
+model ConfidenceRecord {
+  id           String   @id @default(cuid())
+  entityType   String // "ContentItem" | "MediaAsset"
+  entityId     String
+  sourceScore  Int      @default(0)
+  contentScore Int      @default(0)
+  imageScore   Int      @default(0)
+  videoScore   Int      @default(0)
+  contextScore Int      @default(0)
+  humanScore   Int      @default(0)
+  total        Int      @default(0)
+  verdict      Verdict  @default(UNVERIFIED)
+  breakdown    Json?
+  computedAt   DateTime @default(now())
+  computedById String?
+  computedBy   User?    @relation(fields: [computedById], references: [id], onDelete: SetNull)
+
+  contentItemId String?
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([entityType, entityId])
+}
+
+model MediaAsset {
+  id                     String      @id @default(cuid())
+  kind                   MediaKind
+  url                    String
+  mimeType               String?
+  byteSize               Int?
+  capturedAt             DateTime?
+  gpsLat                 Float?
+  gpsLng                 Float?
+  device                 String?
+  metadata               Json?
+  // analysis signals
+  aiGeneratedProbability Float? // 0-1, probability the image is AI-generated
+  deepfakeProbability    Float? // 0-1, probability the video audio/visual is synthetic
+  reverseSearchHits      Int? // number of earlier occurrences found
+  geoVerified            Boolean     @default(false)
+  analysisNotes          String?
+  status                 MediaStatus @default(PENDING)
+  createdAt              DateTime    @default(now())
+
+  reportId      String?
+  report        Report?      @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  contentItemId String?
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  reviewedById  String?
+  reviewedBy    User?        @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([reportId])
+  @@index([contentItemId])
+}
+
+model MapMarker {
+  id          String   @id @default(cuid())
+  label       String
+  lat         Float
+  lng         Float
+  category    String   @default("general") // incident | verified | rumor | correction
+  description String?
+  confidence  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  contentItemId String?
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  @@index([category])
+}
+
+model SocialPost {
+  id          String    @id @default(cuid())
+  platform    String // facebook | x | instagram | telegram | website
+  body        String    @db.Text
+  status      String    @default("draft") // draft | scheduled | published
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  contentItemId String
+  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+
+  @@index([contentItemId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String?
+  entityId   String?
+  detail     Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  actorId String?
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+}
+
+// ─── AI Agents (وكلاء الذكاء الاصطناعي) ──────────────────────────────────────
+enum AgentStatus {
+  ENABLED // مفعّل
+  PAUSED // متوقف مؤقتاً
+  DISABLED // معطّل
+}
+
+enum AgentKind {
+  COLLECTOR // جامع المصادر والأخبار
+  MONITOR // راصد المصادر والبلاغات
+  VERIFIER // مدقق الحقائق آلياً
+  WRITER // الصائغ الاحترافي
+  PUBLISHER // الناشر في وسائل التواصل
+  RESPONDER // الردّ على الأخبار الكاذبة
+}
+
+model Agent {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  name        String
+  role        String
+  description String
+  kind        AgentKind
+  status      AgentStatus @default(ENABLED)
+  config      Json?
+  runCount    Int         @default(0)
+  errorCount  Int         @default(0)
+  lastRunAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  runs AgentRun[]
+
+  @@index([kind])
+}
+
+model AgentRun {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  action    String
+  status    String   @default("ok") // ok | error
+  summary   String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([agentId])
+  @@index([createdAt])
+}
+
+// ─── Social Media Integrations (وسائل التواصل) ────────────────────────────────
+enum ConnectionMode {
+  MOCK // محاكاة — النشر يُسجّل محلياً
+  LIVE // مباشر — إعدادات حقيقية مهيأة
+}
+
+model PlatformIdentity {
+  id        String   @id @default(cuid())
+  provider  String   @unique // google | facebook | x | instagram | telegram | whatsapp | linkedin | tiktok | youtube
+  handle    String?
+  email     String?
+  connected Boolean  @default(false)
+  linkedVia String?
+  updatedAt DateTime @updatedAt
+}
+
+model SocialConnection {
+  id           String         @id @default(cuid())
+  provider     String         @unique
+  displayName  String
+  mode         ConnectionMode @default(MOCK)
+  enabled      Boolean        @default(true)
+  handle       String?
+  accountName  String?
+  credentials  Json?
+  lastPostedAt DateTime?
+  postCount    Int            @default(0)
+  errorCount   Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
