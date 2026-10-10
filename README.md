@@ -79,6 +79,7 @@
 | **الصائغ** (writer) | إعادة صياغة الأخبار الموثّقة بأسلوب صحفي احترافي. |
 | **الناشر** (publisher) | توزيع المحتوى المنشور على كل القنوات المفعّلة. |
 | **المفنّد** (responder) | صياغة ونشر ردود مدعومة بالأدلة على الأخبار الكاذبة. |
+| **الحارس** (guardian) | ينشئ ويزامن صفحات المنصة، يراقب الهوية والبُرد، ويكشف أي تغيير غير مصرّح به ويستعيد الإعدادات المعتمدة. |
 
 | مسار الوكلاء | الوصف |
 | --- | --- |
@@ -95,6 +96,18 @@
 افتراضياً يبحث في Google News بالنسخة اليمنية عن: تعز، اليمن، عدن، صنعاء. يمكن
 تحديد مصادرك عبر `SOURCE_FEEDS` (قائمة روابط مفصولة بفواصل). يُستخدم أيضاً
 [r.jina.ai](https://r.jina.ai) (بلا مفتاح) لقراءة نص مقال كامل عند الحاجة.
+
+## هوية المنصة والبريد والأمن
+
+- **بريد رسمي باسم المنصة:** صناديق `info@` / `support@` / `noreply@` / `security@`
+  على نطاقك (`PLATFORM_DOMAIN`)، تُربط بحساب جوجل للمنصة من صفحة `/platform`.
+- **صفحات المنصة:** «الحارس» يسجّل كل مسار ويعطيه سجلاً قابلاً للتتبع، وينشئ صفحات
+  جديدة على `/p/{slug}`، ويرصد أي حذف أو تغيير أو إخفاء.
+- **مركز الأمن** `/security`: يكشف تغييرات الهوية والبُرد والصلاحيات وكلمات المرور
+  والقنوات ومحاولات الدخول الفاشلة، ويقارن الإعدادات بـ«خط أساس معتمد» ويستعيده
+  بضغطة واحدة عند الاختراق.
+- **واجهات:** `GET/PATCH/POST /api/platform`, `/api/platform/email`, `/api/platform/pages`,
+  `GET/POST /api/security` (`scan` | `approve-baseline` | `restore` | `resolve`).
 
 ## وسائل التواصل الاجتماعي
 
@@ -184,6 +197,18 @@ POST   /api/social/connect          ربط/فصل قناة (social:manage)
 POST   /api/social/google           ربط حساب جوجل (social:manage)
 PATCH  /api/social/{id}             تفعيل/إيقاف قناة (social:manage)
 POST   /api/social/publish          نشر محتوى/بيان على القنوات (social:manage)
+GET    /api/platform                هوية المنصة + البُرد + الصفحات + الانحراف (platform:manage)
+PATCH  /api/platform                تعديل الهوية (platform:manage)
+POST   /api/platform                مزامنة سجل الصفحات (platform:manage)
+GET    /api/platform/email          بُرد المنصة (platform:manage)
+POST   /api/platform/email          تهيئة البُرد أو ربط جوجل (platform:manage)
+GET    /api/platform/pages          قائمة الصفحات (platform:manage)
+POST   /api/platform/pages          إنشاء صفحة /p/{slug} (platform:manage)
+PUT    /api/platform/pages          مزامنة صفحات النظام (platform:manage)
+PATCH  /api/platform/pages          تعديل صفحة (platform:manage)
+DELETE /api/platform/pages?id=      حذف صفحة غير نظامية (platform:manage)
+GET    /api/security                الأحداث + الانحراف + خطوط الأساس (security:manage)
+POST   /api/security                فحص/اعتماد خط أساس/استعادة/معالجة (security:manage)
 ```
 
 ## التطوير
