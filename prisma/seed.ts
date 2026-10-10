@@ -326,6 +326,22 @@ async function main() {
     });
   }
 
+  // Owner's personal backup email — a second, off-platform recovery path.
+  const ownerBackup = (process.env.OWNER_RECOVERY_EMAIL || "albyysks@gmail.com").toLowerCase();
+  const hasOwnerBackup = await prisma.recoveryChannel.findFirst({
+    where: { kind: "BACKUP_EMAIL", value: ownerBackup },
+  });
+  if (!hasOwnerBackup) {
+    await prisma.recoveryChannel.create({
+      data: {
+        kind: "BACKUP_EMAIL",
+        label: "بريد المالك الشخصي",
+        value: ownerBackup,
+        verified: true,
+      },
+    });
+  }
+
   console.log(`Seed complete: users, sources, content, markers, social drafts, agents, connections, ${pageCount} pages, ${emailCount} mailboxes.`);
 }
 
