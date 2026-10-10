@@ -124,6 +124,10 @@ export default function SecurityConsole() {
     else if (action === "approve-baseline") setMsg("اعتُمد خط أساس جديد.");
     else if (action === "restore") setMsg(json.data.restored ? "استُعيدت الإعدادات المعتمدة." : "لا يوجد خط أساس معتمد.");
     else if (action === "dispatch-alerts") setMsg(`أُرسل ${json.data.sent} وفشل ${json.data.failed} وسُجّل ${json.data.skipped}.`);
+    else if (action === "test-alert") {
+      const ok = json.data.results?.every((r: { status: string }) => r.status === "SENT");
+      setMsg(ok ? "أُرسل تنبيه اختبار بنجاح إلى كل قنوات الاسترجاع." : `لم يُرسل فعلياً (${json.data.transport === "inbox" ? "SMTP غير مهيأ" : "فشل الإرسال"}) — راجع سجل التنبيهات.`);
+    }
     else setMsg("تم التنفيذ.");
     load();
   }
@@ -211,9 +215,14 @@ export default function SecurityConsole() {
       <section className="card p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-black">تنبيهات الأمن</h2>
-          <button className="chip" disabled={busy === "dispatch-alerts"} onClick={() => act("dispatch-alerts")}>
-            إرسال المعلّق الآن
-          </button>
+          <div className="flex gap-2">
+            <button className="chip" disabled={busy === "test-alert"} onClick={() => act("test-alert")}>
+              إرسال تنبيه اختبار
+            </button>
+            <button className="chip" disabled={busy === "dispatch-alerts"} onClick={() => act("dispatch-alerts")}>
+              إرسال المعلّق الآن
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

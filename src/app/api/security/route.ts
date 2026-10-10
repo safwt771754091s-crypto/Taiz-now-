@@ -4,7 +4,7 @@ import { handleError, ok, writeAudit } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { approveBaseline, detectDrift, restoreBaseline, runIntegrityScan } from "@/lib/security/config";
 import { SEVERITY_LABELS } from "@/lib/security/events";
-import { dispatchPendingAlerts } from "@/lib/security/alerts";
+import { dispatchPendingAlerts, sendTestAlert } from "@/lib/security/alerts";
 import { addRecoveryChannel, listRecoveryChannels, removeRecoveryChannel } from "@/lib/security/recovery";
 
 export async function GET(req: Request) {
@@ -43,6 +43,7 @@ const actionSchema = z.object({
     "restore",
     "resolve",
     "dispatch-alerts",
+    "test-alert",
     "add-recovery",
     "remove-recovery",
   ]),
@@ -75,6 +76,11 @@ export async function POST(req: Request) {
     }
     if (data.action === "dispatch-alerts") {
       const result = await dispatchPendingAlerts();
+      return ok(result);
+    }
+    if (data.action === "test-alert") {
+      const result = await sendTestAlert();
+      await writeAudit({ actorId: actor?.id, action: "security.alert.test", entityType: "SecurityAlert", detail: { configured: result.configured } });
       return ok(result);
     }
     if (data.action === "add-recovery") {

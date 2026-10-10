@@ -91,6 +91,42 @@ export async function notifySecurityEvent(event: {
   return recipients.length;
 }
 
+/**
+ * Send a real diagnostic email to every recovery recipient right now. Returns
+ * the transport used and per-recipient result so the console can tell the
+ * operator whether SMTP is actually wired up.
+ */
+export async function sendTestAlert(): Promise<{
+  transport: "smtp" | "inbox" | "none";
+  configured: boolean;
+  results: { recipient: string; status: string; error?: string }[];
+}> {
+  const recipients = await alertRecipients();
+  const configured = Boolean(process.env.SMTP_HOST && process.env.SMTP_PORT);
+  const mail = await renderSecurityEmail({
+    title: "رسالة اختبار من الحارس",
+    severity: "INFO",
+    detail: { note: "إن وصلتك هذه الرسالة فقناة تنبيهات المنصة تعمل.", at: new Date().toISOString() },
+  });
+  const results: { recipient: string; status: string; error?: string }[] = [];
+  for (const to of recipients) {
+    const res = await sendMail({ to, subject: mail.subject, text: mail.text, html: mail.html });
+    await enqueueAlert({
+      channel: "EMAIL",
+      recipient: to,
+      subject: mail.subject,
+      body: mail.text,
+      severity: "INFO",
+    });
+    await prisma.securityAlert.updateMany({
+      where: { recipient: to, subject: mail.subject, status: "PENDING" },
+      data: { status: res.status === "SENT" ? "SENT" : res.transport === "inbox" ? "SKIPPED" : "FAILED", sentAt: new Date(), error: res.error ?? null },
+    });
+    results.push({ recipient: to, status: res.status === "SENT" ? "SENT" : res.transport === "inbox" ? "SKIPPED" : "FAILED", error: res.error });
+  }
+  return { transport: results.some((r) => r.status === "SENT") ? "smtp" : configured ? "smtp" : "inbox", configured, results };
+}
+
 /** Deliver all pending alerts. Called by the guardian agent each tick. */
 export async function dispatchPendingAlerts(limit = 25): Promise<{ sent: number; failed: number; skipped: number }> {
   const pending = await prisma.securityAlert.findMany({
