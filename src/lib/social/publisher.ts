@@ -47,6 +47,9 @@ export async function deliver(args: {
     if (args.provider === "whatsapp") {
       return await deliverWhatsapp(args);
     }
+    if (args.provider === "x") {
+      return await deliverX(args);
+    }
     // Credentials present but no concrete adapter for this provider yet.
     return {
       ok: true,
@@ -99,4 +102,23 @@ async function deliverWhatsapp(args: { handle?: string | null; body: string }): 
   const json = (await res.json().catch(() => ({}))) as { messages?: { id?: string }[]; error?: { message?: string } };
   if (!res.ok || json.error) throw new Error(json.error?.message ?? `whatsapp HTTP ${res.status}`);
   return { ok: true, mode: "live", externalId: json.messages?.[0]?.id ?? "", detail: "أُرسل عبر واتساب." };
+}
+
+/** Post a tweet via the X (Twitter) API v2. Requires a user-context token. */
+async function deliverX(args: { body: string }): Promise<DeliverResult> {
+  const token = process.env.X_BEARER_TOKEN || process.env.X_ACCESS_TOKEN;
+  if (!token) throw new Error("مفتاح X غير مُهيّأ");
+  const text = args.body.length > 280 ? `${args.body.slice(0, 277)}…` : args.body;
+  const res = await fetch("https://api.x.com/2/tweets", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    data?: { id?: string };
+    detail?: string;
+    title?: string;
+  };
+  if (!res.ok) throw new Error(json.detail ?? json.title ?? `x HTTP ${res.status}`);
+  return { ok: true, mode: "live", externalId: json.data?.id ?? "", detail: "نُشر على منصة X." };
 }
