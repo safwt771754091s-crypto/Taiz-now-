@@ -16,7 +16,7 @@ export type ProviderDef = {
 export const PROVIDERS: ProviderDef[] = [
   { provider: "website", label: "موقع المنصة", handlePrefix: "@", media: "text", postable: true, envKeys: [], color: "#0ea5e9" },
   { provider: "facebook", label: "فيسبوك", handlePrefix: "@", media: "image", postable: true, envKeys: ["FACEBOOK_PAGE_ID", "FACEBOOK_ACCESS_TOKEN"], color: "#1877f2" },
-  { provider: "x", label: "منصة X (تويتر)", handlePrefix: "@", media: "text", postable: true, envKeys: ["X_API_KEY", "X_ACCESS_TOKEN"], color: "#e7e9ea" },
+  { provider: "x", label: "منصة X (تويتر)", handlePrefix: "@", media: "text", postable: true, envKeys: ["X_ACCESS_TOKEN"], color: "#e7e9ea" },
   { provider: "instagram", label: "إنستغرام", handlePrefix: "@", media: "image", postable: true, envKeys: ["INSTAGRAM_BUSINESS_ID", "INSTAGRAM_ACCESS_TOKEN"], color: "#e1306c" },
   { provider: "telegram", label: "تيليجرام", handlePrefix: "@", media: "text", postable: true, envKeys: ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHANNEL_ID"], color: "#26a5e4" },
   { provider: "whatsapp", label: "واتساب", handlePrefix: "+", media: "text", postable: true, envKeys: ["WHATSAPP_PHONE_ID", "WHATSAPP_TOKEN"], color: "#25d366" },

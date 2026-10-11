@@ -139,6 +139,7 @@ export async function publishContent(contentItemId: string): Promise<{ outcomes:
   for (const conn of connections) {
     const def = PROVIDER_MAP.get(conn.provider);
     if (!def) continue;
+    if (!def.postable) continue; // video-first channels are out of scope for text distribution
     const body = byPlatform.get(conn.provider) ?? `${item.title}\n\n${item.summary}\n${url}`;
     const result = await deliver({ provider: conn.provider, handle: conn.handle, body, url });
     outcomes.push({ provider: conn.provider, label: conn.displayName, ok: result.ok, mode: result.mode, detail: result.detail });
@@ -170,6 +171,8 @@ export async function publishText(input: { title: string; body: string; url?: st
   const connections = await prisma.socialConnection.findMany({ where: { enabled: true } });
   const outcomes: PublishOutcome[] = [];
   for (const conn of connections) {
+    const def = PROVIDER_MAP.get(conn.provider);
+    if (!def || !def.postable) continue; // skip unknown + video-first channels
     const result = await deliver({ provider: conn.provider, handle: conn.handle, body: `${input.title}\n\n${input.body}`, url: input.url });
     outcomes.push({ provider: conn.provider, label: conn.displayName, ok: result.ok, mode: result.mode, detail: result.detail });
     await prisma.socialConnection.update({
