@@ -286,14 +286,17 @@ model SocialPost {
   id          String    @id @default(cuid())
   platform    String // facebook | x | instagram | telegram | website
   body        String    @db.Text
-  status      String    @default("draft") // draft | scheduled | published
+  status      String    @default("draft") // draft | scheduled | published | failed
+  scheduledAt DateTime?
   publishedAt DateTime?
+  error       String?
   createdAt   DateTime  @default(now())
 
   contentItemId String
   contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
 
   @@index([contentItemId])
+  @@index([status, scheduledAt])
 }
 
 model AuditLog {

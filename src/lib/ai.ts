@@ -1,13 +1,14 @@
 import type { ConfidenceSignals } from "./confidence";
+import { AI_ENABLED, aiProviderLabel, chatJson } from "./llm";
 
 /**
- * AI layer. When OPENAI_API_KEY is present we call the model; otherwise we fall
- * back to a deterministic, rule-based analyser so the platform always works
+ * AI layer. When a Groq or OpenAI key is present we call the model; otherwise we
+ * fall back to a deterministic, rule-based analyser so the platform always works
  * offline and in CI. Nothing here is presented to the public as human-verified —
  * AI output is advisory input to a human reviewer.
  */
 
-export const AI_ENABLED = Boolean(process.env.OPENAI_API_KEY);
+export { AI_ENABLED };
 
 export type ClaimAnalysis = {
   aiGenerated: boolean;
@@ -100,9 +101,6 @@ export async function analyzeClaim(input: {
     };
   }
 
-  const { default: OpenAI } = await import("openai");
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   const system = `أنت مساعد تحقق من المعلومات لمنصة إخبارية يمنية.
 مهمتك تقييم الادعاءات بموضوعية ولا تختلق أدلة. أعد JSON فقط بالمفاتيح:
 verdictHint (TRUE|MOSTLY_TRUE|MISLEADING|SUSPICIOUS|FALSE|UNVERIFIED),
@@ -110,27 +108,20 @@ suggestedSignals {source,content,image,video,context,human} قيم من 0 إلى
 reasoning (شرح قصير), checklist (خطوات تحقق), redFlags (قائمة إشارات تحذيرية).`;
 
   try {
-    const completion = await client.chat.completions.create({
-      model,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        {
-          role: "user",
-          content: `الادعاء: ${input.claim}\n\nالأدلة/الملاحظات:\n${input.evidenceText ?? "لا توجد"}\n\nموثوقية المصدر المقدرة: ${input.sourceReliability ?? 50}/100`,
-        },
-      ],
-    });
-    const parsed = JSON.parse(completion.choices[0]?.message?.content ?? "{}");
+    const parsed = await chatJson(
+      system,
+      `الادعاء: ${input.claim}\n\nالأدلة/الملاحظات:\n${input.evidenceText ?? "لا توجد"}\n\nموثوقية المصدر المقدرة: ${input.sourceReliability ?? 50}/100`,
+      0.2,
+    );
+    const model = aiProviderLabel();
     return {
       aiGenerated: true,
       model,
-      verdictHint: parsed.verdictHint ?? heur.verdictHint,
+      verdictHint: (parsed.verdictHint as ClaimAnalysis["verdictHint"]) ?? heur.verdictHint,
       suggestedSignals: normaliseSignals(parsed.suggestedSignals),
       reasoning: typeof parsed.reasoning === "string" ? parsed.reasoning : heur.verdictHint,
-      checklist: Array.isArray(parsed.checklist) && parsed.checklist.length ? parsed.checklist : CHECKLIST_BASE,
-      redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags : heur.redFlags,
+      checklist: Array.isArray(parsed.checklist) && parsed.checklist.length ? (parsed.checklist as string[]) : CHECKLIST_BASE,
+      redFlags: Array.isArray(parsed.redFlags) ? (parsed.redFlags as string[]) : heur.redFlags,
     };
   } catch (err) {
     return {

@@ -1,4 +1,5 @@
 import { AI_ENABLED } from "./ai";
+import { aiProviderLabel, chatJson } from "./llm";
 
 /**
  * Professional Arabic writer. Uses OpenAI when configured, otherwise a robust
@@ -73,21 +74,9 @@ function offlineRebuttal(ctx: WriterContext): WrittenPiece {
 async function callModel(system: string, user: string): Promise<{ headline: string; body: string } | null> {
   if (!AI_ENABLED) return null;
   try {
-    const { default: OpenAI } = await import("openai");
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-    const completion = await client.chat.completions.create({
-      model,
-      temperature: 0.4,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    });
-    const parsed = JSON.parse(completion.choices[0]?.message?.content ?? "{}");
+    const parsed = await chatJson(system, user, 0.4);
     if (typeof parsed.body === "string" && parsed.body.trim()) {
-      return { headline: parsed.headline ?? "", body: parsed.body };
+      return { headline: (parsed.headline as string) ?? "", body: parsed.body };
     }
     return null;
   } catch {
@@ -103,7 +92,7 @@ export async function writeProfessionally(ctx: WriterContext): Promise<WrittenPi
   const user = `العنوان: ${ctx.title}\nالملخص: ${ctx.summary}\nالنص الخام: ${ctx.body ?? "لا يوجد"}\nدرجة الثقة: ${ctx.confidence}/100 (${ctx.verdictLabel})\nالمصادر: ${ctx.sources?.join(", ") ?? "غير مذكورة"}\nالمكان: ${ctx.location ?? "غير محدد"}`;
   const out = await callModel(system, user);
   if (out) {
-    return { aiGenerated: true, model: process.env.OPENAI_MODEL || "gpt-4o-mini", headline: out.headline || ctx.title, body: out.body };
+    return { aiGenerated: true, model: aiProviderLabel(), headline: out.headline || ctx.title, body: out.body };
   }
   return offlineProfessional(ctx);
 }
@@ -116,7 +105,7 @@ export async function draftRebuttal(ctx: WriterContext): Promise<WrittenPiece> {
   const user = `الادعاء الكاذب: ${ctx.title}\nالملخص: ${ctx.summary}\nدرجة الثقة: ${ctx.confidence}/100 (${ctx.verdictLabel})\nالأدلة: ${ctx.sources?.join(", ") ?? "لا توجد"}`;
   const out = await callModel(system, user);
   if (out) {
-    return { aiGenerated: true, model: process.env.OPENAI_MODEL || "gpt-4o-mini", headline: out.headline || `بيان تفنيد: ${ctx.title}`, body: out.body };
+    return { aiGenerated: true, model: aiProviderLabel(), headline: out.headline || `بيان تفنيد: ${ctx.title}`, body: out.body };
   }
   return offlineRebuttal(ctx);
 }

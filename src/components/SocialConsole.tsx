@@ -37,6 +37,8 @@ export default function SocialConsole() {
   const [busy, setBusy] = useState<string | null>(null);
   const [googleEmail, setGoogleEmail] = useState("taiznow@gmail.com");
   const [post, setPost] = useState({ title: "", body: "" });
+  const [items, setItems] = useState<{ id: string; title: string; kind: string }[]>([]);
+  const [sched, setSched] = useState({ contentItemId: "", scheduledAt: "" });
 
   const load = useCallback(async () => {
     const res = await fetch("/api/social");
@@ -49,9 +51,37 @@ export default function SocialConsole() {
     }
   }, []);
 
+  const loadItems = useCallback(async () => {
+    const res = await fetch("/api/content?status=PUBLISHED&take=50");
+    const json = await res.json();
+    if (res.ok) setItems(json.data.map((i: { id: string; title: string; kind: string }) => ({ id: i.id, title: i.title, kind: i.kind })));
+  }, []);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadItems();
+  }, [load, loadItems]);
+
+  async function schedule(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy("schedule");
+    setMsg(null);
+    setErr(null);
+    const res = await fetch("/api/social/publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "schedule-content",
+        contentItemId: sched.contentItemId,
+        scheduledAt: sched.scheduledAt ? new Date(sched.scheduledAt).toISOString() : undefined,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) setErr(json.error ?? "تعذر الجدولة");
+    else setMsg(`تمت جدولة النشر على ${json.data.scheduled} قناة.`);
+    setBusy(null);
+    load();
+  }
 
   async function toggle(id: string, enabled: boolean) {
     setBusy(id);
@@ -217,6 +247,42 @@ export default function SocialConsole() {
           />
           <button disabled={busy !== null} className="btn-primary rounded-xl px-6 py-2.5 disabled:opacity-50">
             {busy === "publish" ? "جارٍ النشر..." : "نشر على كل القنوات المفعّلة"}
+          </button>
+        </form>
+      </section>
+
+      <section className="card space-y-3 p-5">
+        <h2 className="text-lg font-bold">جدولة النشر</h2>
+        <p className="text-sm text-[var(--muted)]">
+          اختر خبراً موثّقاً ووقتاً مستقبلياً؛ سيطلقه وكيل النشر تلقائياً عند حلول الوقت.
+        </p>
+        <form onSubmit={schedule} className="space-y-3">
+          <label className="block space-y-1 text-sm">
+            <span className="font-bold">المحتوى المنشور</span>
+            <select
+              required
+              value={sched.contentItemId}
+              onChange={(e) => setSched({ ...sched, contentItemId: e.target.value })}
+            >
+              <option value="">— اختر —</option>
+              {items.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-bold">وقت النشر (اختياري — الافتراضي بعد ساعة)</span>
+            <input
+              type="datetime-local"
+              dir="ltr"
+              value={sched.scheduledAt}
+              onChange={(e) => setSched({ ...sched, scheduledAt: e.target.value })}
+            />
+          </label>
+          <button disabled={busy !== null} className="btn-primary rounded-xl px-6 py-2.5 disabled:opacity-50">
+            {busy === "schedule" ? "جارٍ الجدولة..." : "جدولة النشر"}
           </button>
         </form>
       </section>
