@@ -2,3 +2,5 @@
 // (e.g. OPENAI_API_KEY) that would otherwise change module-level behaviour.
 delete process.env.OPENAI_API_KEY;
 delete process.env.GROQ_API_KEY;
+delete process.env.OLLAMA_ENABLED;
+delete process.env.OLLAMA_BASE_URL;
