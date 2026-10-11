@@ -90,7 +90,7 @@ async function deliverFacebook(args: { body: string; url?: string }): Promise<De
   const token = process.env.FACEBOOK_ACCESS_TOKEN!;
   const body = new URLSearchParams({ message: args.body, access_token: token });
   if (args.url) body.set("link", args.url);
-  const res = await fetch(`https://graph.facebook.com/v23.0/${pageId}/feed`, { method: "POST", body });
+  const res = await fetch(`https://graph.facebook.com/v25.0/${pageId}/feed`, { method: "POST", body });
   const json = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
   if (!res.ok || json.error) throw new Error(json.error?.message ?? `facebook HTTP ${res.status}`);
   return { ok: true, mode: "live", externalId: json.id ?? "", detail: "نُشر على فيسبوك." };
@@ -101,7 +101,7 @@ async function deliverWhatsapp(args: { handle?: string | null; body: string }): 
   const token = process.env.WHATSAPP_TOKEN!;
   const to = args.handle;
   if (!to) throw new Error("لا يوجد رقم مستلم");
-  const res = await fetch(`https://graph.facebook.com/v23.0/${phoneId}/messages`, {
+  const res = await fetch(`https://graph.facebook.com/v25.0/${phoneId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", to, type: "text", text: { body: args.body } }),
@@ -167,7 +167,7 @@ async function deliverInstagram(args: { body: string; imageUrl?: string }): Prom
   const igId = process.env.INSTAGRAM_BUSINESS_ID!;
   const token = process.env.INSTAGRAM_ACCESS_TOKEN!;
   if (!args.imageUrl) throw new Error("إنستغرام يحتاج رابط صورة عام (imageUrl)");
-  const create = await fetch(`https://graph.facebook.com/v23.0/${igId}/media`, {
+  const create = await fetch(`https://graph.facebook.com/v25.0/${igId}/media`, {
     method: "POST",
     body: new URLSearchParams({ image_url: args.imageUrl, caption: args.body, access_token: token }),
   });
@@ -175,7 +175,7 @@ async function deliverInstagram(args: { body: string; imageUrl?: string }): Prom
   if (!create.ok || created.error || !created.id) {
     throw new Error(created.error?.message ?? `instagram media HTTP ${create.status}`);
   }
-  const publish = await fetch(`https://graph.facebook.com/v23.0/${igId}/media_publish`, {
+  const publish = await fetch(`https://graph.facebook.com/v25.0/${igId}/media_publish`, {
     method: "POST",
     body: new URLSearchParams({ creation_id: created.id, access_token: token }),
   });

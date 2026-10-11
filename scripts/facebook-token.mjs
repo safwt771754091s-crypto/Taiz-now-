@@ -11,7 +11,7 @@
  *   2. call /me/accounts with the long-lived token -> Page tokens (no expiry)
  */
 
-const GRAPH = "https://graph.facebook.com/v23.0";
+const GRAPH = "https://graph.facebook.com/v25.0";
 
 const appId = process.env.FACEBOOK_APP_ID;
 const appSecret = process.env.FACEBOOK_APP_SECRET;
