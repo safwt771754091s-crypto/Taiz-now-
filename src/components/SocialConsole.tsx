@@ -13,6 +13,7 @@ type Connection = {
   postCount: number;
   errorCount: number;
   lastPostedAt: string | null;
+  expiresAt: string | null;
 };
 
 type Identity = {
@@ -27,6 +28,16 @@ type Identity = {
 function fmt(dt: string | null) {
   if (!dt) return "—";
   return new Date(dt).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" });
+}
+
+/** Warn when a stored credential is about to expire or already has. */
+function expiryHint(expiresAt: string | null): { tone: string; text: string } | null {
+  if (!expiresAt) return null;
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return { tone: "text-red-400", text: "انتهى التوكن — أعد الربط" };
+  if (ms < 24 * 3600 * 1000)
+    return { tone: "text-amber-300", text: `ينتهي التوكن بعد ${Math.max(1, Math.round(ms / 3600000))} ساعة` };
+  return null;
 }
 
 export default function SocialConsole() {
@@ -234,6 +245,11 @@ export default function SocialConsole() {
                   <span className={`chip ${c.mode === "LIVE" ? "text-emerald-300" : "text-amber-300"}`}>
                     {c.mode === "LIVE" ? "مباشر" : "محاكاة"}
                   </span>
+                  {expiryHint(c.expiresAt) && (
+                    <div className={`mt-1 text-xs ${expiryHint(c.expiresAt)!.tone}`}>
+                      {expiryHint(c.expiresAt)!.text}
+                    </div>
+                  )}
                 </td>
                 <td className="p-2">{c.postCount}</td>
                 <td className="p-2 text-xs text-[var(--muted)]">{fmt(c.lastPostedAt)}</td>

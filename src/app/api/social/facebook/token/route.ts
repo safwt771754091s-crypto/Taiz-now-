@@ -75,9 +75,9 @@ async function handleToken(req: Request) {
 
     // Posting needs pages_manage_posts; without it the token connects but every
     // publish fails, so surface the exact missing scope up front.
-    const debug = await graph<{ data?: { scopes?: string[] } }>(
+    const debug = await graph<{ data?: { scopes?: string[]; expires_at?: number } }>(
       `${GRAPH}/debug_token?input_token=${encodeURIComponent(longToken)}&access_token=${encodeURIComponent(longToken)}`,
-    ).catch(() => ({ data: {} as { scopes?: string[] } }));
+    ).catch(() => ({ data: {} as { scopes?: string[]; expires_at?: number } }));
     const scopes = debug.data?.scopes ?? [];
     if (!scopes.includes("pages_manage_posts")) {
       return NextResponse.json(
@@ -91,9 +91,12 @@ async function handleToken(req: Request) {
     }
 
     const credentials = { FACEBOOK_PAGE_ID: page.id, FACEBOOK_ACCESS_TOKEN: page.access_token };
+    // A Page token derived from a short-lived user token inherits its expiry; warn
+    // the admin before it silently dies mid-publish.
+    const expiresAt = debug.data?.expires_at ? new Date(debug.data.expires_at * 1000) : null;
     await prisma.socialConnection.update({
       where: { provider: "facebook" },
-      data: { mode: "LIVE", enabled: true, handle: `@${page.name}`, accountName: page.name, credentials },
+      data: { mode: "LIVE", enabled: true, handle: `@${page.name}`, accountName: page.name, credentials, expiresAt },
     });
     await prisma.platformIdentity.update({
       where: { provider: "facebook" },
