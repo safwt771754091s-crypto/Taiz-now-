@@ -48,3 +48,7 @@ next-env.d.ts
 
 # agent workspace notes
 /.openhands/
+
+# Agent tooling
+.agents/
+skills-lock.json
