@@ -9,6 +9,12 @@ const GRAPH = "https://graph.facebook.com/v25.0";
 const schema = z.object({
   /** A user token pasted from Graph API Explorer. */
   userToken: z.string().min(20),
+  /**
+   * Optional App Secret. Supplying it lets us exchange the pasted short-lived
+   * token for a long-lived one, whose Page token never expires. It is used once
+   * for the exchange and never persisted.
+   */
+  appSecret: z.string().min(10).optional(),
 });
 
 type GraphError = { error?: { message?: string } };
@@ -44,23 +50,34 @@ async function handleToken(req: Request) {
   }
 
   let userToken: string;
+  let suppliedSecret: string | undefined;
   try {
-    userToken = schema.parse(await req.json()).userToken.trim();
+    const parsed = schema.parse(await req.json());
+    userToken = parsed.userToken.trim();
+    suppliedSecret = parsed.appSecret?.trim() || undefined;
   } catch {
     return NextResponse.json({ error: "التوكن مطلوب" }, { status: 400 });
   }
+
+  // Prefer a secret supplied in the request (the admin may not want it in .env),
+  // then fall back to the configured one.
+  const secret = suppliedSecret ?? appSecret;
 
   try {
     // Prefer a long-lived token, but a token from the Graph API Explorer is
     // often already long-lived — or the app secret may be unavailable. Either
     // way, fall back to the pasted token so Page discovery still works.
     let longToken = userToken;
+    let exchanged = false;
     try {
       const longRes = await graph<{ access_token?: string }>(
         `${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}` +
-          `&client_secret=${appSecret}&fb_exchange_token=${encodeURIComponent(userToken)}`,
+          `&client_secret=${secret}&fb_exchange_token=${encodeURIComponent(userToken)}`,
       );
-      if (longRes.access_token) longToken = longRes.access_token;
+      if (longRes.access_token) {
+        longToken = longRes.access_token;
+        exchanged = true;
+      }
     } catch {
       // ignore — use the token as-is
     }
@@ -92,8 +109,15 @@ async function handleToken(req: Request) {
 
     const credentials = { FACEBOOK_PAGE_ID: page.id, FACEBOOK_ACCESS_TOKEN: page.access_token };
     // A Page token derived from a short-lived user token inherits its expiry; warn
-    // the admin before it silently dies mid-publish.
-    const expiresAt = debug.data?.expires_at ? new Date(debug.data.expires_at * 1000) : null;
+    // the admin before it silently dies mid-publish. A token minted from a
+    // long-lived exchange (or one that never expires) reports no expires_at.
+    const pageDebug = await graph<{ data?: { expires_at?: number } }>(
+      `${GRAPH}/debug_token?input_token=${encodeURIComponent(page.access_token)}` +
+        `&access_token=${encodeURIComponent(longToken)}`,
+    ).catch(() => ({ data: {} as { expires_at?: number } }));
+    const rawExpiry = pageDebug.data?.expires_at ?? debug.data?.expires_at;
+    const expiresAt = rawExpiry ? new Date(rawExpiry * 1000) : null;
+    const permanent = !expiresAt;
     await prisma.socialConnection.update({
       where: { provider: "facebook" },
       data: { mode: "LIVE", enabled: true, handle: `@${page.name}`, accountName: page.name, credentials, expiresAt },
@@ -106,10 +130,15 @@ async function handleToken(req: Request) {
       actorId: user?.id,
       action: "social.connect",
       entityType: "SocialConnection",
-      detail: { provider: "facebook", method: "token" },
+      detail: { provider: "facebook", method: "token", permanent, exchanged },
     });
 
-    return NextResponse.json({ data: { page: page.name, pageId: page.id } });
+    return NextResponse.json({
+      data: { page: page.name, pageId: page.id, permanent, exchanged },
+      message: permanent
+        ? "تم الربط بتوكن دائم ♾️ — لن ينتهي."
+        : "تم الربط، لكن التوكن مؤقت. أضف المفتاح السري للتطبيق لتوليد توكن دائم.",
+    });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }

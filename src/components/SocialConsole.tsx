@@ -48,6 +48,7 @@ export default function SocialConsole() {
   const [busy, setBusy] = useState<string | null>(null);
   const [googleEmail, setGoogleEmail] = useState("taiznow@gmail.com");
   const [fbToken, setFbToken] = useState("");
+  const [fbSecret, setFbSecret] = useState("");
   const [post, setPost] = useState({ title: "", body: "" });
   const [items, setItems] = useState<{ id: string; title: string; kind: string }[]>([]);
   const [sched, setSched] = useState({ contentItemId: "", scheduledAt: "" });
@@ -142,13 +143,14 @@ export default function SocialConsole() {
     const res = await fetch("/api/social/facebook/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userToken: fbToken.trim() }),
+      body: JSON.stringify({ userToken: fbToken.trim(), appSecret: fbSecret.trim() || undefined }),
     });
     const json = await res.json();
     if (!res.ok) setErr(json.error ?? "تعذر ربط فيسبوك");
     else {
-      setMsg(`تم ربط صفحة فيسبوك: ${json.data.page} — الوضع الآن مباشر ✅`);
+      setMsg(json.message ?? `تم ربط صفحة فيسبوك: ${json.data.page} — الوضع الآن مباشر ✅`);
       setFbToken("");
+      setFbSecret("");
     }
     setBusy(null);
     load();
@@ -299,18 +301,28 @@ export default function SocialConsole() {
           </a>{" "}
           بصلاحيات pages_show_list وpages_read_engagement وpages_manage_posts، ثم الصقه هنا.
         </p>
-        <form onSubmit={connectFacebookToken} className="flex flex-wrap gap-2">
+        <form onSubmit={connectFacebookToken} className="space-y-2">
           <input
             required
-            className="flex-1"
+            className="w-full"
             placeholder="الصق توكن الوصول هنا..."
             value={fbToken}
             onChange={(e) => setFbToken(e.target.value)}
+          />
+          <input
+            type="password"
+            className="w-full"
+            placeholder="المفتاح السري للتطبيق (اختياري — لجعل التوكن دائماً ♾️)"
+            value={fbSecret}
+            onChange={(e) => setFbSecret(e.target.value)}
           />
           <button className="chip text-[#1877f2]" disabled={busy === "fb-token"}>
             {busy === "fb-token" ? "جارٍ الربط..." : "ربط بالتوكن"}
           </button>
         </form>
+        <p className="text-xs text-[var(--muted)]">
+          المفتاح السري يُستخدم مرة واحدة لتوليد توكن دائم، ولا يُحفظ في المنصة.
+        </p>
       </section>
 
       <section className="card space-y-3 p-5">
