@@ -51,11 +51,19 @@ async function handleToken(req: Request) {
   }
 
   try {
-    const longRes = await graph<{ access_token?: string }>(
-      `${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}` +
-        `&client_secret=${appSecret}&fb_exchange_token=${encodeURIComponent(userToken)}`,
-    );
-    const longToken = longRes.access_token ?? userToken;
+    // Prefer a long-lived token, but a token from the Graph API Explorer is
+    // often already long-lived — or the app secret may be unavailable. Either
+    // way, fall back to the pasted token so Page discovery still works.
+    let longToken = userToken;
+    try {
+      const longRes = await graph<{ access_token?: string }>(
+        `${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}` +
+          `&client_secret=${appSecret}&fb_exchange_token=${encodeURIComponent(userToken)}`,
+      );
+      if (longRes.access_token) longToken = longRes.access_token;
+    } catch {
+      // ignore — use the token as-is
+    }
 
     const accounts = await graph<{ data?: { id: string; name: string; access_token: string }[] }>(
       `${GRAPH}/me/accounts?fields=id,name,access_token&access_token=${longToken}`,
@@ -63,6 +71,23 @@ async function handleToken(req: Request) {
     const page = accounts.data?.[0];
     if (!page) {
       return NextResponse.json({ error: "لا توجد صفحة يديرها هذا الحساب" }, { status: 400 });
+    }
+
+    // Posting needs pages_manage_posts; without it the token connects but every
+    // publish fails, so surface the exact missing scope up front.
+    const debug = await graph<{ data?: { scopes?: string[] } }>(
+      `${GRAPH}/debug_token?input_token=${encodeURIComponent(longToken)}&access_token=${encodeURIComponent(longToken)}`,
+    ).catch(() => ({ data: {} as { scopes?: string[] } }));
+    const scopes = debug.data?.scopes ?? [];
+    if (!scopes.includes("pages_manage_posts")) {
+      return NextResponse.json(
+        {
+          error:
+            "التوكن لا يملك صلاحية pages_manage_posts (النشر). أعد توليده من Graph API Explorer مع إضافة هذه الصلاحية.",
+          scopes,
+        },
+        { status: 400 },
+      );
     }
 
     const credentials = { FACEBOOK_PAGE_ID: page.id, FACEBOOK_ACCESS_TOKEN: page.access_token };
