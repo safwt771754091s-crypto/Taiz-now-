@@ -19,37 +19,44 @@ export default async function ContentDetail({ slug }: { slug: string }) {
   if (!item) notFound();
 
   const latestScore = item.scores[0] ?? null;
-  const components = (
-    latestScore
-      ? [
-          { key: "المصدر", value: latestScore.sourceScore, weight: CONFIDENCE_WEIGHTS.source },
-          { key: "المحتوى", value: latestScore.contentScore, weight: CONFIDENCE_WEIGHTS.content },
-          { key: "الصور", value: latestScore.imageScore, weight: CONFIDENCE_WEIGHTS.image },
-          { key: "الفيديو", value: latestScore.videoScore, weight: CONFIDENCE_WEIGHTS.video },
-          { key: "السياق", value: latestScore.contextScore, weight: CONFIDENCE_WEIGHTS.context },
-          { key: "التدقيق البشري", value: latestScore.humanScore, weight: CONFIDENCE_WEIGHTS.human },
-        ]
-      : []
-  );
+  const components = latestScore
+    ? [
+        { key: "المصدر", value: latestScore.sourceScore, weight: CONFIDENCE_WEIGHTS.source },
+        { key: "المحتوى", value: latestScore.contentScore, weight: CONFIDENCE_WEIGHTS.content },
+        { key: "الصور", value: latestScore.imageScore, weight: CONFIDENCE_WEIGHTS.image },
+        { key: "الفيديو", value: latestScore.videoScore, weight: CONFIDENCE_WEIGHTS.video },
+        { key: "السياق", value: latestScore.contextScore, weight: CONFIDENCE_WEIGHTS.context },
+        { key: "التدقيق البشري", value: latestScore.humanScore, weight: CONFIDENCE_WEIGHTS.human },
+      ]
+    : [];
+
+  const sectionLabel =
+    item.kind === "RUMOR" ? "مرصد الشائعات" : item.kind === "CORRECTION" ? "مركز التصحيحات" : "الأخبار";
 
   return (
-    <article className="space-y-6">
+    <article className="mx-auto max-w-4xl space-y-6">
       <nav className="text-sm text-[var(--muted)]">
-        <Link href="/" className="hover:text-white">
+        <Link href="/" className="hover:text-[var(--brand)]">
           الرئيسية
         </Link>{" "}
-        / <span className="text-white/80">{CONTENT_KIND_LABELS[item.kind]}</span>
+        /{" "}
+        <Link
+          href={item.kind === "RUMOR" ? "/rumors" : item.kind === "CORRECTION" ? "/corrections" : "/news"}
+          className="hover:text-[var(--brand)]"
+        >
+          {sectionLabel}
+        </Link>
       </nav>
 
-      <header className="card p-6">
+      <header className="border-b-2 border-[var(--border-strong)] pb-6">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <VerdictBadge verdict={item.verdict} confidence={item.confidence} />
-          <span className="chip">{CONTENT_KIND_LABELS[item.kind]}</span>
+          <span className="kicker">{CONTENT_KIND_LABELS[item.kind]}</span>
+          <VerdictBadge verdict={item.verdict} />
           {item.location && <span className="chip">📍 {item.location}</span>}
         </div>
-        <h1 className="text-2xl font-black leading-snug md:text-3xl">{item.title}</h1>
-        <p className="mt-3 text-[var(--muted)]">{item.summary}</p>
-        <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-[var(--muted)]">
+        <h1 className="headline text-3xl font-bold leading-tight md:text-5xl">{item.title}</h1>
+        <p className="mt-4 text-lg leading-relaxed text-[var(--muted)]">{item.summary}</p>
+        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--border)] pt-4 text-xs text-[var(--muted)]">
           <span>آخر مراجعة: {formatDate(item.lastReviewedAt)}</span>
           <span>النشر: {formatDate(item.publishedAt)}</span>
           {item.reviewedBy?.name && <span>راجعه: {item.reviewedBy.name}</span>}
@@ -66,33 +73,32 @@ export default async function ContentDetail({ slug }: { slug: string }) {
       </header>
 
       {item.claim && (
-        <section className="card border-r-4 border-r-amber-500/60 p-5">
-          <h2 className="mb-2 text-sm font-bold text-amber-300">الادعاء المتداول</h2>
+        <section className="card border-r-4 border-r-[var(--warn)] p-5">
+          <h2 className="mb-2 text-sm font-bold text-[var(--warn)]">الادعاء المتداول</h2>
           <p className="text-sm leading-relaxed">{item.claim}</p>
         </section>
       )}
 
       {item.correctionNote && (
-        <section className="card border-r-4 border-r-sky-500/60 p-5">
-          <h2 className="mb-2 text-sm font-bold text-sky-300">ما تم تصحيحه</h2>
+        <section className="card border-r-4 border-r-[var(--brand-2)] p-5">
+          <h2 className="mb-2 text-sm font-bold text-[var(--brand-2)]">ما تم تصحيحه</h2>
           <p className="text-sm leading-relaxed">{item.correctionNote}</p>
         </section>
       )}
 
-      <section className="card p-6">
-        <h2 className="mb-3 text-lg font-bold">التفاصيل والتحليل</h2>
-        <div className="whitespace-pre-wrap text-sm leading-loose">{item.body}</div>
+      <section className="card p-6 md:p-8">
+        <div className="article-body whitespace-pre-wrap">{item.body}</div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="card p-5">
-          <h2 className="mb-4 text-lg font-bold">درجة الثقة</h2>
+          <h2 className="mb-4 border-b border-[var(--border)] pb-2 text-lg font-bold">درجة الثقة</h2>
           <ConfidenceBar total={item.confidence} />
           <p className="mt-3 text-sm text-[var(--muted)]">
-            التقييم الحالي: <span className="font-bold text-white">{VERDICT_LABELS[item.verdict]}</span>
+            التقييم الحالي: <span className="font-bold text-[var(--foreground)]">{VERDICT_LABELS[item.verdict]}</span>
           </p>
           {components.length > 0 && (
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-4 space-y-3">
               {components.map((c) => (
                 <li key={c.key} className="text-sm">
                   <div className="mb-1 flex items-center justify-between">
@@ -101,8 +107,8 @@ export default async function ContentDetail({ slug }: { slug: string }) {
                     </span>
                     <span className="font-bold">{c.value}/100</span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full bg-gradient-to-l from-teal-400 to-sky-500" style={{ width: `${c.value}%` }} />
+                  <div className="meter">
+                    <span style={{ width: `${c.value}%` }} />
                   </div>
                 </li>
               ))}
@@ -111,13 +117,13 @@ export default async function ContentDetail({ slug }: { slug: string }) {
         </div>
 
         <div className="card p-5">
-          <h2 className="mb-4 text-lg font-bold">الأدلة والمصادر</h2>
+          <h2 className="mb-4 border-b border-[var(--border)] pb-2 text-lg font-bold">الأدلة والمصادر</h2>
           {item.evidence.length === 0 ? (
             <p className="text-sm text-[var(--muted)]">لا توجد أدلة مسجلة.</p>
           ) : (
             <ul className="space-y-3">
               {item.evidence.map((e) => (
-                <li key={e.id} className="rounded-xl border border-[var(--border)] p-3">
+                <li key={e.id} className="card-quiet p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="chip text-[var(--muted)]">{EVIDENCE_LABELS[e.type] ?? e.type}</span>
                     {e.source?.name && <span className="text-xs text-[var(--muted)]">{e.source.name}</span>}
@@ -129,7 +135,7 @@ export default async function ContentDetail({ slug }: { slug: string }) {
                       href={e.url}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="mt-1 inline-block text-xs text-brand hover:underline"
+                      className="link mt-1 inline-block text-xs"
                     >
                       المصدر ↗
                     </a>
@@ -143,10 +149,10 @@ export default async function ContentDetail({ slug }: { slug: string }) {
 
       {item.media.length > 0 && (
         <section className="card p-5">
-          <h2 className="mb-4 text-lg font-bold">تحليل الوسائط</h2>
+          <h2 className="mb-4 border-b border-[var(--border)] pb-2 text-lg font-bold">تحليل الوسائط</h2>
           <div className="grid gap-3 md:grid-cols-2">
             {item.media.map((m) => (
-              <div key={m.id} className="rounded-xl border border-[var(--border)] p-3 text-sm">
+              <div key={m.id} className="card-quiet p-3 text-sm">
                 <p className="font-bold">{m.kind === "VIDEO" ? "فيديو" : m.kind === "IMAGE" ? "صورة" : "رسالة"}</p>
                 {typeof m.aiGeneratedProbability === "number" && (
                   <p className="text-xs text-[var(--muted)]">
@@ -167,7 +173,7 @@ export default async function ContentDetail({ slug }: { slug: string }) {
         </section>
       )}
 
-      <section className="card p-5 text-sm text-[var(--muted)]">
+      <section className="card-quiet p-5 text-sm leading-relaxed text-[var(--muted)]">
         <p>
           منهجيتنا: لا ننشر ما يُقال بل نتحقق مما حدث. تعتمد درجات الثقة على المصدر والمحتوى وتحليل
           الوسائط والسياق والمراجعة البشرية، وتُحدَّث عند ورود معلومات جديدة.

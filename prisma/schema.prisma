@@ -99,6 +99,7 @@ model User {
   confidenceAudits ConfidenceRecord[]
   recoveryChannels RecoveryChannel[]
   loginEvents      LoginEvent[]
+  visits           Visit[]
 }
 
 model Permission {
@@ -578,4 +579,24 @@ model LoginEvent {
 
   @@index([email, createdAt])
   @@index([fingerprint])
+}
+
+/// Every page view on the public site — the owner's "who visited" ledger.
+model Visit {
+  id        String   @id @default(cuid())
+  path      String
+  referer   String?
+  ip        String?
+  userAgent String?
+  country   String? // from an edge geo header when present (Vercel)
+  city      String?
+  isBot     Boolean  @default(false)
+  visitorId String? // hashed ip+ua, distinct-visitor counting; no raw id stored
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId])
+  @@index([path])
 }

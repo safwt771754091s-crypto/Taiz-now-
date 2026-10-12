@@ -18,14 +18,14 @@ export const BAND_LABELS: Record<string, string> = {
   false: "غير صحيح",
 };
 
-/** Tailwind class fragments per verdict (used for badges). */
+/** Tailwind class fragments per verdict (used for badges) — tuned for the light theme. */
 export const VERDICT_STYLES: Record<Verdict, string> = {
-  TRUE: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  MOSTLY_TRUE: "bg-teal-500/15 text-teal-300 border-teal-500/30",
-  MISLEADING: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  SUSPICIOUS: "bg-orange-500/15 text-orange-300 border-orange-500/30",
-  FALSE: "bg-rose-500/15 text-rose-300 border-rose-500/30",
-  UNVERIFIED: "bg-slate-500/15 text-slate-300 border-slate-500/30",
+  TRUE: "bg-emerald-50 text-emerald-800 border-emerald-300",
+  MOSTLY_TRUE: "bg-teal-50 text-teal-800 border-teal-300",
+  MISLEADING: "bg-amber-50 text-amber-800 border-amber-300",
+  SUSPICIOUS: "bg-orange-50 text-orange-800 border-orange-300",
+  FALSE: "bg-rose-50 text-rose-800 border-rose-300",
+  UNVERIFIED: "bg-slate-100 text-slate-700 border-slate-300",
 };
 
 export const CONTENT_KIND_LABELS: Record<ContentKind, string> = {
