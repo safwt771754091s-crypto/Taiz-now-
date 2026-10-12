@@ -36,6 +36,7 @@ export default function SocialConsole() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [googleEmail, setGoogleEmail] = useState("taiznow@gmail.com");
+  const [fbToken, setFbToken] = useState("");
   const [post, setPost] = useState({ title: "", body: "" });
   const [items, setItems] = useState<{ id: string; title: string; kind: string }[]>([]);
   const [sched, setSched] = useState({ contentItemId: "", scheduledAt: "" });
@@ -118,6 +119,26 @@ export default function SocialConsole() {
     const json = await res.json();
     if (!res.ok) setErr(json.error ?? "تعذر الربط");
     else setMsg(`تم ربط ${json.data.displayName} (${json.data.mode}).`);
+    setBusy(null);
+    load();
+  }
+
+  async function connectFacebookToken(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy("fb-token");
+    setMsg(null);
+    setErr(null);
+    const res = await fetch("/api/social/facebook/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userToken: fbToken.trim() }),
+    });
+    const json = await res.json();
+    if (!res.ok) setErr(json.error ?? "تعذر ربط فيسبوك");
+    else {
+      setMsg(`تم ربط صفحة فيسبوك: ${json.data.page} — الوضع الآن مباشر ✅`);
+      setFbToken("");
+    }
     setBusy(null);
     load();
   }
@@ -246,6 +267,34 @@ export default function SocialConsole() {
         <p className="mt-3 text-xs text-[var(--muted)]">
           وضع المحاكاة يسجّل المنشورات محلياً دون شبكة. لإتاحة النشر المباشر أضف مفاتيح كل منصة في متغيرات البيئة.
         </p>
+      </section>
+
+      <section className="card space-y-3 p-5">
+        <h2 className="text-lg font-bold">ربط فيسبوك بالتوكن (طريقة بديلة مضمونة)</h2>
+        <p className="text-xs text-[var(--muted)]">
+          إن فشل زر «ربط بنقرة واحدة»، استخدم هذه الطريقة. أنشئ توكن من{" "}
+          <a
+            className="text-brand underline"
+            href="https://developers.facebook.com/tools/explorer/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Graph API Explorer
+          </a>{" "}
+          بصلاحيات pages_show_list وpages_read_engagement وpages_manage_posts، ثم الصقه هنا.
+        </p>
+        <form onSubmit={connectFacebookToken} className="flex flex-wrap gap-2">
+          <input
+            required
+            className="flex-1"
+            placeholder="الصق توكن الوصول هنا..."
+            value={fbToken}
+            onChange={(e) => setFbToken(e.target.value)}
+          />
+          <button className="chip text-[#1877f2]" disabled={busy === "fb-token"}>
+            {busy === "fb-token" ? "جارٍ الربط..." : "ربط بالتوكن"}
+          </button>
+        </form>
       </section>
 
       <section className="card space-y-3 p-5">

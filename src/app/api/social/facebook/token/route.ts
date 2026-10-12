@@ -1,0 +1,88 @@
+import { z } from "zod";
+import { NextResponse } from "next/server";
+import { requirePermission } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { handleError, writeAudit } from "@/lib/http";
+
+const GRAPH = "https://graph.facebook.com/v25.0";
+
+const schema = z.object({
+  /** A user token pasted from Graph API Explorer. */
+  userToken: z.string().min(20),
+});
+
+type GraphError = { error?: { message?: string } };
+
+async function graph<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  const json = (await res.json()) as T & GraphError;
+  if (!res.ok || json.error) throw new Error(json.error?.message ?? `HTTP ${res.status}`);
+  return json;
+}
+
+/**
+ * Manual Facebook connect: the admin pastes a short-lived user token from the
+ * Graph API Explorer. We exchange it for a long-lived token, read their Pages,
+ * and persist a never-expiring Page token — same result as the OAuth flow but
+ * without any redirect URI, which keeps working even when the Meta app has no
+ * Facebook Login product configured.
+ */
+export async function POST(req: Request) {
+  try {
+    return await handleToken(req);
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
+async function handleToken(req: Request) {
+  const user = await requirePermission("social:manage");
+  const appId = process.env.FACEBOOK_APP_ID;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  if (!appId || !appSecret) {
+    return NextResponse.json({ error: "FACEBOOK_APP_ID/SECRET غير مُهيّأ" }, { status: 400 });
+  }
+
+  let userToken: string;
+  try {
+    userToken = schema.parse(await req.json()).userToken.trim();
+  } catch {
+    return NextResponse.json({ error: "التوكن مطلوب" }, { status: 400 });
+  }
+
+  try {
+    const longRes = await graph<{ access_token?: string }>(
+      `${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}` +
+        `&client_secret=${appSecret}&fb_exchange_token=${encodeURIComponent(userToken)}`,
+    );
+    const longToken = longRes.access_token ?? userToken;
+
+    const accounts = await graph<{ data?: { id: string; name: string; access_token: string }[] }>(
+      `${GRAPH}/me/accounts?fields=id,name,access_token&access_token=${longToken}`,
+    );
+    const page = accounts.data?.[0];
+    if (!page) {
+      return NextResponse.json({ error: "لا توجد صفحة يديرها هذا الحساب" }, { status: 400 });
+    }
+
+    const credentials = { FACEBOOK_PAGE_ID: page.id, FACEBOOK_ACCESS_TOKEN: page.access_token };
+    await prisma.socialConnection.update({
+      where: { provider: "facebook" },
+      data: { mode: "LIVE", enabled: true, handle: `@${page.name}`, accountName: page.name, credentials },
+    });
+    await prisma.platformIdentity.update({
+      where: { provider: "facebook" },
+      data: { handle: `@${page.name}`, connected: true, linkedVia: "token" },
+    });
+    await writeAudit({
+      actorId: user?.id,
+      action: "social.connect",
+      entityType: "SocialConnection",
+      detail: { provider: "facebook", method: "token" },
+    });
+
+    return NextResponse.json({ data: { page: page.name, pageId: page.id } });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+  }
+}
