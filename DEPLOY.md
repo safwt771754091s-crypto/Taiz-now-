@@ -15,8 +15,10 @@ Vercel هي شركة صانعة Next.js — النشر عليها بضغطة و�
 ### الخطوة 1 — قاعدة بيانات مجانية (Neon)
 1. افتح <https://neon.tech> وسجّل بحساب GitHub.
 2. أنشئ مشروعاً جديداً (Project) باسم `taiznow`.
-3. انسخ **Connection String** (يبدأ بـ `postgresql://...`).
-   - اختر النسخة **Pooled** (فيها `-pooler`) — مهم لأن Vercel يفتح اتصالات كثيرة.
+3. من **Connection Details** انسخ **رابطين**:
+   - **Pooled connection** (فيه `-pooler`) → هذا `DATABASE_URL` (للتطبيق).
+   - **Direct connection** (بدون `-pooler`) → هذا `DIRECT_URL` (للترحيلات).
+   - ⚠️ مهم: الترحيلات تحتاج الاتصال المباشر، وإلا يفشل البناء.
 
 ### الخطوة 2 — ارفع المشروع على Vercel
 1. افتح <https://vercel.com/new>.
@@ -29,6 +31,7 @@ Vercel هي شركة صانعة Next.js — النشر عليها بضغطة و�
 | الاسم | القيمة | ملاحظة |
 |---|---|---|
 | `DATABASE_URL` | رابط Neon (Pooled) | **إلزامي** |
+| `DIRECT_URL` | رابط Neon (Direct، بدون `-pooler`) | **إلزامي** — للترحيلات |
 | `AUTH_SECRET` | نص عشوائي طويل | **إلزامي** — ولّده من <https://generate-secret.vercel.app/32> |
 | `NEXTAUTH_URL` | `https://<اسم-مشروعك>.vercel.app` | بعد النشر حدّثه للنطاق النهائي |
 | `PLATFORM_URL` | `https://<اسم-مشروعك>.vercel.app` | لبناء الروابط |

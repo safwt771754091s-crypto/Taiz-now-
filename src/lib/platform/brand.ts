@@ -22,19 +22,27 @@ export const DEFAULT_BRAND: Brand = {
   website: null,
 };
 
-/** Read the platform brand, falling back to defaults when unset. */
+/**
+ * Read the platform brand, falling back to defaults when unset.
+ * Never throws: the root layout calls this on every route, including
+ * build-time prerendering where the database is not reachable (e.g. Vercel).
+ */
 export async function getBrand(): Promise<Brand> {
-  const row = await prisma.platformBrand.findUnique({ where: { id: "main" } });
-  if (!row) return DEFAULT_BRAND;
-  return {
-    name: row.name,
-    nameEn: row.nameEn,
-    tagline: row.tagline,
-    slogan: row.slogan,
-    primary: row.primary,
-    accent: row.accent,
-    website: row.website,
-  };
+  try {
+    const row = await prisma.platformBrand.findUnique({ where: { id: "main" } });
+    if (!row) return DEFAULT_BRAND;
+    return {
+      name: row.name,
+      nameEn: row.nameEn,
+      tagline: row.tagline,
+      slogan: row.slogan,
+      primary: row.primary,
+      accent: row.accent,
+      website: row.website,
+    };
+  } catch {
+    return DEFAULT_BRAND;
+  }
 }
 
 /** Inline style that applies the brand colours to a subtree. */

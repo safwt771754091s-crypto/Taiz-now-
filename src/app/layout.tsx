@@ -3,6 +3,11 @@ import "./globals.css";
 import Nav from "@/components/Nav";
 import { getBrand, brandStyle } from "@/lib/platform/brand";
 
+// Brand is owner-editable and read on every page, so the shell must render per
+// request. Prerendering it at build time would also need the database during
+// `next build`, which is unavailable on serverless builders such as Vercel.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "تعز الآن — منصة التحقق الذكي",
   description:
