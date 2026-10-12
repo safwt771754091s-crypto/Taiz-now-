@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requirePermission, currentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { clientIp, handleError, ok, writeAudit } from "@/lib/http";
 
 const updateSchema = z.object({

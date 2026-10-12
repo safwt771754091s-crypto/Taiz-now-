@@ -113,7 +113,7 @@ async function createContent(input: {
 async function main() {
   const reviewer = await seedUsers();
   const sources = await seedSources();
-  const [official, eyewitness, intl, social, osint] = sources;
+  const [official, eyewitness, intl, , osint] = sources;
 
   const news = await createContent({
     kind: "NEWS",

@@ -81,7 +81,6 @@ function fmt(dt: string) {
 export default function SecurityConsole() {
   const [events, setEvents] = useState<Event[]>([]);
   const [drift, setDrift] = useState<Drift | null>(null);
-  const [baselines, setBaselines] = useState<{ hash: string; createdAt: string }[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [recovery, setRecovery] = useState<Recovery[]>([]);
   const [logins, setLogins] = useState<LoginRow[]>([]);
@@ -97,7 +96,6 @@ export default function SecurityConsole() {
     if (res.ok) {
       setEvents(json.data.events);
       setDrift(json.data.drift);
-      setBaselines(json.data.baselines);
       setAlerts(json.data.alerts ?? []);
       setRecovery(json.data.recovery ?? []);
       setLogins(json.data.logins ?? []);
@@ -105,7 +103,9 @@ export default function SecurityConsole() {
   }, []);
 
   useEffect(() => {
-    load();
+    void (async () => {
+      await load();
+    })();
   }, [load]);
 
   async function act(action: string, id?: string) {

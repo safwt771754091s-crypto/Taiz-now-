@@ -62,7 +62,9 @@ export default function AgentsConsole() {
   }, []);
 
   useEffect(() => {
-    load();
+    void (async () => {
+      await load();
+    })();
   }, [load]);
 
   async function act(id: string, action: "run" | "enable" | "pause" | "disable") {

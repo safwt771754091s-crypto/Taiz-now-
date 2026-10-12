@@ -71,20 +71,24 @@ export default function SocialConsole() {
   }, []);
 
   useEffect(() => {
-    load();
-    loadItems();
+    void (async () => {
+      await load();
+      await loadItems();
+    })();
   }, [load, loadItems]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const fb = params.get("fb");
-    if (fb === "ok") {
-      setMsg(`تم ربط صفحة فيسبوك: ${params.get("page") ?? ""} — الوضع الآن مباشر ✅`);
-      window.history.replaceState({}, "", "/social");
-    } else if (fb === "error") {
-      setErr(`فشل ربط فيسبوك: ${params.get("message") ?? "خطأ غير معروف"}`);
-      window.history.replaceState({}, "", "/social");
-    }
+    void (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const fb = params.get("fb");
+      if (fb === "ok") {
+        setMsg(`تم ربط صفحة فيسبوك: ${params.get("page") ?? ""} — الوضع الآن مباشر ✅`);
+        window.history.replaceState({}, "", "/social");
+      } else if (fb === "error") {
+        setErr(`فشل ربط فيسبوك: ${params.get("message") ?? "خطأ غير معروف"}`);
+        window.history.replaceState({}, "", "/social");
+      }
+    })();
   }, []);
 
   async function schedule(e: React.FormEvent) {
@@ -270,6 +274,8 @@ export default function SocialConsole() {
                           ربط مباشر
                         </button>
                         {c.provider === "facebook" && (
+                          // Full-page navigation is required: this is the OAuth redirect endpoint.
+                          // eslint-disable-next-line @next/next/no-html-link-for-pages
                           <a href="/api/social/facebook" className="chip text-[#1877f2]">
                             ربط بنقرة واحدة
                           </a>
