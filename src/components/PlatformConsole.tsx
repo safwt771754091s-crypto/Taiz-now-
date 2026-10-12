@@ -40,7 +40,9 @@ export default function PlatformConsole() {
   }, []);
 
   useEffect(() => {
-    load();
+    void (async () => {
+      await load();
+    })();
   }, [load]);
 
   async function saveBrand() {

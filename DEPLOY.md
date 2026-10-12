@@ -33,6 +33,7 @@ Vercel هي شركة صانعة Next.js — النشر عليها بضغطة و�
 | `DATABASE_URL` | رابط Neon (Pooled) | **إلزامي** |
 | `DIRECT_URL` | رابط Neon (Direct، بدون `-pooler`) | للترحيلات (أو اتركه فارغاً) |
 | `AUTH_SECRET` | نص عشوائي طويل | **إلزامي** — ولّده من <https://generate-secret.vercel.app/32> |
+| `AUTH_TRUST_HOST` | `true` | **إلزامي** خلف Vercel |
 | `NEXTAUTH_URL` | `https://<اسم-مشروعك>.vercel.app` | بعد النشر حدّثه للنطاق النهائي |
 | `PLATFORM_URL` | `https://<اسم-مشروعك>.vercel.app` | لبناء الروابط |
 | `CRON_SECRET` | نص عشوائي | **إلزامي** لتشغيل المهام المجدولة |
@@ -63,6 +64,25 @@ owner@taiznow.ye  /  password
 1. من لوحة Vercel: **Settings → Domains → Add**.
 2. اكتب `taiznow.ye` واتبع تعليمات DNS.
 3. حدّث `NEXTAUTH_URL` و `PLATFORM_URL` للنطاق الجديد وأعد النشر.
+
+---
+
+## الخيار الأسهل: Vercel Postgres (بلا موقع خارجي) ⭐⭐
+
+إن لم ترغب بفتح حساب Neon، أنشئ قاعدة البيانات من داخل Vercel نفسه:
+
+1. افتح مشروعك على Vercel → تبويب **Storage**.
+2. اضغط **Create Database** → اختر **Postgres** → أنشئه.
+3. اضغط **Connect Project** واختر مشروعك. سيضيف Vercel المتغيّرات **تلقائياً**.
+4. لا تحتاج لنسخ أي رابط يدوياً — المنصة تتعرّف على أسماء متغيّرات Vercel
+   (`POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `DATABASE_URL_UNPOOLED`,
+   `POSTGRES_URL_NON_POOLING`) تلقائياً.
+5. أضف فقط المتغيّرات غير الخاصة بقاعدة البيانات: `AUTH_SECRET`, `AUTH_TRUST_HOST`,
+   `NEXTAUTH_URL`, `PLATFORM_URL`, `CRON_SECRET`, `OLLAMA_ENABLED=false`.
+6. أعد النشر (**Redeploy**).
+
+> ملاحظة: المنصة تقبل أيضاً أسماء Neon (`DATABASE_URL` / `DIRECT_URL`) — أي مزوّد
+> Postgres قياسي يعمل.
 
 ---
 

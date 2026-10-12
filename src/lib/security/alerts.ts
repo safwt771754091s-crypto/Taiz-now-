@@ -155,7 +155,8 @@ export async function dispatchPendingAlerts(limit = 25): Promise<{ sent: number;
           where: { id: a.id },
           data: { status: res.ok ? "SENT" : "FAILED", sentAt: new Date(), error: res.ok ? null : `HTTP ${res.status}` },
         });
-        res.ok ? sent++ : failed++;
+        if (res.ok) sent++;
+        else failed++;
       } catch (err) {
         await prisma.securityAlert.update({
           where: { id: a.id },
