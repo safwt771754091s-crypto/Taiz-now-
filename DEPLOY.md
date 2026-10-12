@@ -1,0 +1,112 @@
+# 🚀 دليل نشر منصة «تعز الآن» على الإنترنت (دائم)
+
+هذا الدليل يشرح خطوة بخطوة كيف ترفع المنصة على استضافة دائمة، ليراها الجميع
+على رابط ثابت مثل `https://taiznow.ye`.
+
+المنصة جاهزة للنشر بالكامل: لا تكتب أي ملفات على القرص، تعمل على أي استضافة
+حديثة، وفيها مسار خاص للمهام المجدولة (`/api/cron/tick`) يعمل تلقائياً.
+
+---
+
+## الخيار الأسرع: Vercel (مجاني للبداية) ⭐
+
+Vercel هي شركة صانعة Next.js — النشر عليها بضغطة واحدة من GitHub.
+
+### الخطوة 1 — قاعدة بيانات مجانية (Neon)
+1. افتح <https://neon.tech> وسجّل بحساب GitHub.
+2. أنشئ مشروعاً جديداً (Project) باسم `taiznow`.
+3. انسخ **Connection String** (يبدأ بـ `postgresql://...`).
+   - اختر النسخة **Pooled** (فيها `-pooler`) — مهم لأن Vercel يفتح اتصالات كثيرة.
+
+### الخطوة 2 — ارفع المشروع على Vercel
+1. افتح <https://vercel.com/new>.
+2. اختر **Import Git Repository** ثم اختر `safwt771754091s-crypto/Taiz-now-`.
+3. اترك الإعدادات الافتراضية (Vercel يقرأ `vercel.json` تلقائياً).
+
+### الخطوة 3 — أضف متغيرات البيئة (Environment Variables)
+في صفحة الاستيراد اضغط **Environment Variables** وأضف:
+
+| الاسم | القيمة | ملاحظة |
+|---|---|---|
+| `DATABASE_URL` | رابط Neon (Pooled) | **إلزامي** |
+| `AUTH_SECRET` | نص عشوائي طويل | **إلزامي** — ولّده من <https://generate-secret.vercel.app/32> |
+| `NEXTAUTH_URL` | `https://<اسم-مشروعك>.vercel.app` | بعد النشر حدّثه للنطاق النهائي |
+| `PLATFORM_URL` | `https://<اسم-مشروعك>.vercel.app` | لبناء الروابط |
+| `CRON_SECRET` | نص عشوائي | **إلزامي** لتشغيل المهام المجدولة |
+| `GROQ_API_KEY` | مفتاح من <https://console.groq.com/keys> | مجاني — يفعّل الذكاء الاصطناعي |
+| `OLLAMA_ENABLED` | `false` | مهم: لا يوجد Ollama على Vercel |
+
+> ⚠️ **لا تضع** `OLLAMA_BASE_URL` على Vercel إطلاقاً.
+
+### الخطوة 4 — انشر
+اضغط **Deploy**. سيبني Vercel المنصة تلقائياً (يشمل تشغيل migrations).
+
+### الخطوة 5 — أنشئ حساب المدير
+بعد نجاح النشر، افتح Terminal محلياً (أو من جهازك) ونفّذ مرة واحدة:
+
+```bash
+DATABASE_URL="<رابط-Neon>" npx prisma db seed
+```
+
+> أو من Vercel: أضف `SEED_ON_BOOT=true` مؤقتاً ثم أعد النشر، ثم أزله.
+
+بيانات الدخول الافتراضية:
+```
+owner@taiznow.ye  /  password
+```
+**غيّرها فوراً بعد أول دخول.**
+
+### الخطوة 6 — اربط نطاقك الخاص (اختياري)
+1. من لوحة Vercel: **Settings → Domains → Add**.
+2. اكتب `taiznow.ye` واتبع تعليمات DNS.
+3. حدّث `NEXTAUTH_URL` و `PLATFORM_URL` للنطاق الجديد وأعد النشر.
+
+---
+
+## الخيار الثاني: خادم دائم (Railway / Render / VPS)
+
+المنصة فيها `Dockerfile` جاهز. أي استضافة تدعم Docker ستعمل.
+
+1. أنشئ خدمة **PostgreSQL** من لوحة الاستضافة.
+2. أنشئ خدمة **Web** من المستودع (Dockerfile).
+3. أضف نفس متغيرات البيئة أعلاه + `SEED_ON_BOOT=true` (مرة واحدة).
+4. المنصة تشغّل حلقة المهام المجدولة داخلياً تلقائياً عبر `docker-entrypoint.sh`.
+
+---
+
+## المهام المجدولة (Autopilot)
+
+الوكلاء (الجامع، المدقق، الكاتب، الناشر...) تعمل دورياً:
+
+- **Vercel:** `vercel.json` يسجّل مهمة يومية على `/api/cron/tick`.
+  > ملاحظة: خطة Vercel المجانية تسمح بمهمة واحدة **يومياً** فقط. للحصول على
+  > تحديث كل 10 دقائق، رقِّ الخطة إلى Pro، أو استخدم خدمة جدولة خارجية مجانية
+  > مثل <https://cron-job.org> تنادي الرابط:
+  > `https://<نطاقك>/api/cron/tick` مع ترويسة
+  > `Authorization: Bearer <CRON_SECRET>`.
+- **خادم دائم:** `docker-entrypoint.sh` ينادي نفس المسار كل 5 دقائق تلقائياً.
+
+المسار محمي بـ `CRON_SECRET` — لا يمكن لأحد تشغيله من الخارج.
+
+---
+
+## قائمة التحقق قبل الإطلاق ✅
+
+- [ ] قاعدة بيانات Postgres (Pooled) جاهزة
+- [ ] `DATABASE_URL` مضبوط
+- [ ] `AUTH_SECRET` عشوائي وطويل
+- [ ] `CRON_SECRET` مضبوط
+- [ ] `NEXTAUTH_URL` و `PLATFORM_URL` = النطاق الحقيقي
+- [ ] `OLLAMA_ENABLED=false` (على Vercel)
+- [ ] مفتاح AI (Groq أو OpenAI)
+- [ ] تغيير كلمة سر المدير
+- [ ] اختبار الدخول + إرسال بلاغ + نشر منشور
+
+---
+
+## روابط سريعة
+
+- **Vercel:** <https://vercel.com/new>
+- **Neon (قاعدة بيانات مجانية):** <https://neon.tech>
+- **Groq (ذكاء اصطناعي مجاني):** <https://console.groq.com/keys>
+- **توليد سر عشوائي:** <https://generate-secret.vercel.app/32>

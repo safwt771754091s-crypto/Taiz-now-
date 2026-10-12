@@ -46,7 +46,7 @@ describe("feed parser", () => {
 describe("agent catalog", () => {
   it("defines the core agents with unique slugs", () => {
     const slugs = AGENT_CATALOG.map((a) => a.slug);
-    expect(slugs).toEqual(["collector", "monitor", "verifier", "writer", "publisher", "responder"]);
+    expect(slugs).toEqual(["collector", "guardian", "monitor", "verifier", "writer", "publisher", "responder"]);
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 

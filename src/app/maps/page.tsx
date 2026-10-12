@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { roleHasPermission } from "@/lib/rbac";
 import MapView from "@/components/MapView";
+import MarkerForm from "@/components/MarkerForm";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +15,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default async function MapsPage() {
+  const session = await auth();
+  const canVerifyGeo = roleHasPermission(session?.user?.role, "geo:verify");
   const markers = await prisma.mapMarker.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
 
   return (
@@ -52,6 +57,8 @@ export default async function MapsPage() {
           لا توجد مواقع مضافة بعد. يضيف محللو الجغرافيا المواقع بعد التحقق.
         </p>
       )}
+
+      {canVerifyGeo && <MarkerForm />}
     </div>
   );
 }

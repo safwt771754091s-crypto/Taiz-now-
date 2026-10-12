@@ -44,7 +44,7 @@ ensure_app() {
     sleep 2
   fi
   log "Starting Next.js on port ${PORT}"
-  PORT="$PORT" nohup npx next start -p "$PORT" > "$LOG_DIR/app.log" 2>&1 &
+  PORT="$PORT" nohup env -u NEXTAUTH_URL -u NEXTAUTH_URL_INTERNAL -u PLATFORM_URL -u OPENAI_API_KEY npx next start -p "$PORT" > "$LOG_DIR/app.log" 2>&1 &
   echo $! > "$LOG_DIR/app.pid"
 }
 

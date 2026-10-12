@@ -98,6 +98,8 @@ model User {
   mediaReviewed    MediaAsset[]
   auditLogs        AuditLog[]
   confidenceAudits ConfidenceRecord[]
+  recoveryChannels RecoveryChannel[]
+  loginEvents      LoginEvent[]
 }
 
 model Permission {
@@ -284,14 +286,17 @@ model SocialPost {
   id          String    @id @default(cuid())
   platform    String // facebook | x | instagram | telegram | website
   body        String    @db.Text
-  status      String    @default("draft") // draft | scheduled | published
+  status      String    @default("draft") // draft | scheduled | published | failed
+  scheduledAt DateTime?
   publishedAt DateTime?
+  error       String?
   createdAt   DateTime  @default(now())
 
   contentItemId String
   contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
 
   @@index([contentItemId])
+  @@index([status, scheduledAt])
 }
 
 model AuditLog {
@@ -323,6 +328,7 @@ enum AgentKind {
   WRITER // الصائغ الاحترافي
   PUBLISHER // الناشر في وسائل التواصل
   RESPONDER // الردّ على الأخبار الكاذبة
+  GUARDIAN // حارس المنصة: الصفحات والإعدادات والأمن
 }
 
 model Agent {
@@ -384,9 +390,193 @@ model SocialConnection {
   handle       String?
   accountName  String?
   credentials  Json?
+  /** When the stored credential stops working (null = never expires). */
+  expiresAt    DateTime?
   lastPostedAt DateTime?
   postCount    Int            @default(0)
   errorCount   Int            @default(0)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+}
+
+// ─── Platform branding / email identity (هوية المنصة والبريد) ─────────────────
+model PlatformBrand {
+  id        String   @id @default("main")
+  name      String   @default("تعز الآن")
+  nameEn    String   @default("Taiz Now")
+  tagline   String   @default("منصة التحقق الذكي")
+  slogan    String   @default("لا ننشر ما يُقال... بل نتحقق مما حدث.")
+  primary   String   @default("#2dd4bf")
+  accent    String   @default("#38bdf8")
+  website   String?
+  updatedAt DateTime @updatedAt
+}
+
+enum EmailKind {
+  INFO // عام / info@
+  SUPPORT // دعم / support@
+  NOREPLY // لا للرد / noreply@
+  SECURITY // أمني / security@
+}
+
+model PlatformEmailAccount {
+  id              String    @id @default(cuid())
+  address         String    @unique
+  kind            EmailKind @default(INFO)
+  displayName     String
+  provider        String    @default("google") // google | custom-domain
+  linkedVia       String    @default("google")
+  verified        Boolean   @default(false)
+  usedForLogin    Boolean   @default(false)
+  usedForRecovery Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+enum PageKind {
+  LANDING
+  SECTION
+  PLATFORM
+  CONTACT
+  LEGAL
+  OTHER
+}
+
+model ManagedPage {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  route       String   @unique
+  kind        PageKind @default(OTHER)
+  description String?
+  systemRoute Boolean  @default(false) // صفحة كود فعلية — لا تُحذف
+  agentBuilt  Boolean  @default(false)
+  published   Boolean  @default(true)
+  navOrder    Int      @default(0)
+  icon        String?
+  tags        String[] @default([])
+  health      String   @default("ok") // ok | drift | error
+  lastChecked DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([kind])
+}
+
+enum SecurityEventKind {
+  CONFIG_DRIFT // تغيّر إعدادات مهمّة
+  BRAND_CHANGE // تغيّر الهوية/الشعار
+  EMAIL_CHANGE // تغيّر بريد المنصة
+  PAGE_CHANGE // تغيّر/حذف صفحة
+  ROLE_CHANGE // تغيّر صلاحية مستخدم
+  PASSWORD_CHANGE // تغيّر كلمة مرور
+  LOGIN_FAILED // محاولة دخول فاشلة
+  NEW_DEVICE // دخول من جهاز/موقع جديد
+  CONNECTION_CHANGE // تغيّر قناة تواصل
+  INTEGRITY_OK // فحص سلامة ناجح
+  RECOVERY // استعادة إلى نسخة معتمدة
+}
+
+enum SecuritySeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model SecurityEvent {
+  id          String           @id @default(cuid())
+  kind        SecurityEventKind
+  severity    SecuritySeverity @default(INFO)
+  title       String
+  detail      Json?
+  actorId     String?
+  subjectId   String?
+  resolved    Boolean          @default(false)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([kind])
+  @@index([createdAt])
+}
+
+model ConfigSnapshot {
+  id         String   @id @default(cuid())
+  scope      String   @default("platform")
+  hash       String
+  payload    Json
+  approvedBy String?
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([scope, createdAt])
+}
+
+// ─── Security alerting & account recovery (تنبيهات الأمن وقناة الاسترجاع) ──────
+enum AlertChannel {
+  EMAIL
+  WEBHOOK
+  INBOX
+}
+
+enum AlertDelivery {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model SecurityAlert {
+  id             String          @id @default(cuid())
+  channel        AlertChannel
+  recipient      String
+  subject        String
+  body           String
+  severity       SecuritySeverity @default(INFO)
+  status         AlertDelivery   @default(PENDING)
+  error          String?
+  securityEventId String?
+  createdAt      DateTime        @default(now())
+  sentAt         DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum RecoveryChannelKind {
+  BACKUP_EMAIL
+  PHONE
+  TOTP
+}
+
+model RecoveryChannel {
+  id          String               @id @default(cuid())
+  kind        RecoveryChannelKind
+  label       String
+  value       String // البريد الاحتياطي أو الرقم (يُخزّن مختصراً/masked في الواجهة)
+  userId      String?
+  user        User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  verified    Boolean              @default(false)
+  primary     Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([userId])
+}
+
+model LoginEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email      String
+  ok         Boolean
+  ip         String?
+  userAgent  String?
+  fingerprint String? // ip+ua hash — للكشف عن جهاز/موقع جديد
+  createdAt  DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([fingerprint])
 }
