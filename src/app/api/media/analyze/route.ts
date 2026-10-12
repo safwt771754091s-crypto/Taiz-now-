@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     // Reverse-search signal increases the AI/deepfake risk if the asset appeared earlier.
     const hits = data.reverseSearchHits ?? null;
     let aiProb = analysis.aiGeneratedProbability;
-    let deepfake = analysis.deepfakeProbability;
+    const deepfake = analysis.deepfakeProbability;
     const flags = [...analysis.flags];
     if (hits && hits > 0) {
       flags.push(`عُثر على المادة (${hits}) مرة سابقة — قد تكون معاد استخدامها خارج سياقها`);

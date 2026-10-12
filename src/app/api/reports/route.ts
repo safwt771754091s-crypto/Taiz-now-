@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { currentUser, requirePermission } from "@/lib/auth";
-import { clientIp, fail, handleError, ok, writeAudit } from "@/lib/http";
+import { clientIp, handleError, ok, writeAudit } from "@/lib/http";
 
 const createSchema = z.object({
   type: z.enum(["NEWS", "IMAGE", "VIDEO", "MESSAGE", "OTHER"]).default("NEWS"),

@@ -36,7 +36,9 @@ export default function UserManager() {
   }
 
   useEffect(() => {
-    load();
+    void (async () => {
+      await load();
+    })();
   }, []);
 
   async function create(e: React.FormEvent) {

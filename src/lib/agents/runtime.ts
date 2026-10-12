@@ -10,8 +10,7 @@ import { yemenFeeds, collectFeed } from "./sources";
 import { ensureSystemPages, checkPageIntegrity } from "@/lib/platform/pages";
 import { ensurePlatformEmails } from "@/lib/platform/email";
 import { getBrand } from "@/lib/platform/brand";
-import { runIntegrityScan, detectDrift } from "@/lib/security/config";
-import { recordSecurityEvent } from "@/lib/security/events";
+import { detectDrift } from "@/lib/security/config";
 import { dispatchPendingAlerts } from "@/lib/security/alerts";
 
 export type AgentTickResult = {

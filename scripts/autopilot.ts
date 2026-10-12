@@ -3,12 +3,11 @@
  * (scripts/autopilot_loop.sh) calls this on an interval so the platform keeps
  * working without a human logged in.
  */
-import { PrismaClient } from "@prisma/client";
 import { runAutopilot, ensureAgents } from "../src/lib/agents/runtime";
 import { ensureConnections } from "../src/lib/social/connect";
+import { prisma } from "../src/lib/prisma";
 
 async function main() {
-  const prisma = new PrismaClient();
   try {
     await ensureAgents();
     await ensureConnections();

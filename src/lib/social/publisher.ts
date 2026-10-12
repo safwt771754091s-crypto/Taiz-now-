@@ -1,4 +1,4 @@
-import { PROVIDER_MAP, providerEnvPresent } from "./providers";
+import { PROVIDER_MAP } from "./providers";
 
 export type DeliverResult = {
   ok: boolean;
