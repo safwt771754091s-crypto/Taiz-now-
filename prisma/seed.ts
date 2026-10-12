@@ -1,4 +1,5 @@
-import { PrismaClient, type Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
+import { prisma } from "../src/lib/prisma";
 import bcrypt from "bcryptjs";
 import { score } from "../src/lib/confidence";
 import { draftSocialPosts } from "../src/lib/ai";
@@ -8,8 +9,6 @@ import { getBrand, updateBrand } from "../src/lib/platform/brand";
 import { ensurePlatformEmails } from "../src/lib/platform/email";
 import { ensureSystemPages } from "../src/lib/platform/pages";
 import { platformAddress } from "../src/lib/platform/email";
-
-const prisma = new PrismaClient();
 
 const DEMO_PASSWORD = "password";
 
