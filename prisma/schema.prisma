@@ -8,12 +8,6 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // Neon/pgbouncer pools cannot run the DDL that `prisma migrate` needs, so
-  // migrations use a direct connection. On Neon, DIRECT_URL is the host WITHOUT
-  // the `-pooler` suffix. Locally it is not needed: run `prisma migrate deploy`
-  // with `DATABASE_URL=$DIRECT_URL` set, or just leave both pointing at the same
-  // local database.
-  directUrl = env("DIRECT_URL")
 }
 
 enum Role {
