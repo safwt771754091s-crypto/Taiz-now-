@@ -13,6 +13,16 @@
 
 ---
 
+## 🚀 النشر الدائم بنقرة واحدة
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsafwt771754091s-crypto%2FTaiz-now-&env=DATABASE_URL,AUTH_SECRET,CRON_SECRET,NEXTAUTH_URL,PLATFORM_URL,GROQ_API_KEY,OLLAMA_ENABLED&envDescription=%D8%B1%D8%A7%D8%A8%D8%B7%20%D9%82%D8%A7%D8%B9%D8%AF%D8%A9%20%D8%A8%D9%8A%D8%A7%D9%86%D8%A7%D8%AA%20Neon%20%D9%88%D8%B3%D8%B1%20%D8%B9%D8%B4%D9%88%D8%A7%D8%A6%D9%8A%20%D9%88%D9%85%D9%81%D8%AA%D8%A7%D8%AD%20Groq&envLink=https%3A%2F%2Fgithub.com%2Fsafwt771754091s-crypto%2FTaiz-now-%2Fblob%2Fmain%2FDEPLOY.md&project-name=taiznow&repository-name=Taiz-now-)
+
+> اضغط الزر أعلاه، ثم أدخل المتغيرات المطلوبة (قاعدة بيانات مجانية من
+> [Neon](https://neon.tech) + سر عشوائي + مفتاح AI مجاني من [Groq](https://console.groq.com/keys)).
+> **الدليل الكامل بالعربية: [DEPLOY.md](DEPLOY.md).**
+
+---
+
 ## نظرة عامة
 
 منصة `taiznow` تجمع في مكان واحد:
