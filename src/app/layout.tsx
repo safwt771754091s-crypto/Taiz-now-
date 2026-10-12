@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import { getBrand, brandStyle } from "@/lib/platform/brand";
+import { Analytics } from "@vercel/analytics/next";
 
 // Brand is owner-editable and read on every page, so the shell must render per
 // request. Prerendering it at build time would also need the database during
@@ -29,6 +30,7 @@ export default async function RootLayout({
             {brand.name} — {brand.tagline} · الحقيقة أولاً، والأدلة قبل الأحكام.
           </p>
         </footer>
+        <Analytics />
       </body>
     </html>
   );
