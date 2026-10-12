@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
 
-// Neon/pgbouncer pools cannot run the DDL that `prisma migrate` needs.
-// DIRECT_URL points at the direct (unpooled) endpoint; when it is absent we
-// fall back to DATABASE_URL so a single-URL setup still works.
-process.env.DIRECT_URL ||= process.env.DATABASE_URL || "";
+// Migrations run DDL, which a Neon/pgbouncer pool cannot execute. DIRECT_URL is
+// the direct (unpooled) endpoint; the app itself keeps using the pooled
+// DATABASE_URL at runtime. When DIRECT_URL is unset we use DATABASE_URL as-is.
+const env = { ...process.env };
+if (env.DIRECT_URL) env.DATABASE_URL = env.DIRECT_URL;
 
-const result = spawnSync("npx", ["prisma", "migrate", "deploy"], { stdio: "inherit" });
+const result = spawnSync("npx", ["prisma", "migrate", "deploy"], { stdio: "inherit", env });
 process.exit(result.status ?? 1);

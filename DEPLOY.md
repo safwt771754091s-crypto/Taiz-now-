@@ -31,7 +31,7 @@ Vercel هي شركة صانعة Next.js — النشر عليها بضغطة و�
 | الاسم | القيمة | ملاحظة |
 |---|---|---|
 | `DATABASE_URL` | رابط Neon (Pooled) | **إلزامي** |
-| `DIRECT_URL` | رابط Neon (Direct، بدون `-pooler`) | **إلزامي** — للترحيلات |
+| `DIRECT_URL` | رابط Neon (Direct، بدون `-pooler`) | للترحيلات (أو اتركه فارغاً) |
 | `AUTH_SECRET` | نص عشوائي طويل | **إلزامي** — ولّده من <https://generate-secret.vercel.app/32> |
 | `NEXTAUTH_URL` | `https://<اسم-مشروعك>.vercel.app` | بعد النشر حدّثه للنطاق النهائي |
 | `PLATFORM_URL` | `https://<اسم-مشروعك>.vercel.app` | لبناء الروابط |
