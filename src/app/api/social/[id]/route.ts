@@ -2,6 +2,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth";
 import { clientIp, handleError, ok, writeAudit } from "@/lib/http";
+import { recordSecurityEvent } from "@/lib/security/events";
 
 const schema = z.object({
   enabled: z.boolean().optional(),
@@ -24,6 +25,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       detail: data,
       ip: clientIp(req),
     });
+    if (typeof data.enabled === "boolean" || data.handle) {
+      await recordSecurityEvent({
+        kind: "CONNECTION_CHANGE",
+        severity: "MEDIUM",
+        title: `تغيير إعدادات قناة ${conn.provider}`,
+        detail: { provider: conn.provider, ...data },
+        actorId: user?.id,
+      });
+    }
     return ok(conn);
   } catch (err) {
     return handleError(err);

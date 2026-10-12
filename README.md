@@ -13,6 +13,16 @@
 
 ---
 
+## 🚀 النشر الدائم بنقرة واحدة
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsafwt771754091s-crypto%2FTaiz-now-%2Ftree%2Fmain&env=DATABASE_URL,AUTH_SECRET,CRON_SECRET,NEXTAUTH_URL,PLATFORM_URL,GROQ_API_KEY,OLLAMA_ENABLED&envDescription=%D8%B1%D8%A7%D8%A8%D8%B7%20%D9%82%D8%A7%D8%B9%D8%AF%D8%A9%20%D8%A8%D9%8A%D8%A7%D9%86%D8%A7%D8%AA%20Neon%20%D9%88%D8%B3%D8%B1%20%D8%B9%D8%B4%D9%88%D8%A7%D8%A6%D9%8A%20%D9%88%D9%85%D9%81%D8%AA%D8%A7%D8%AD%20Groq&envLink=https%3A%2F%2Fgithub.com%2Fsafwt771754091s-crypto%2FTaiz-now-%2Fblob%2Fmain%2FDEPLOY.md&project-name=taiznow&repository-name=Taiz-now-)
+
+> اضغط الزر أعلاه، ثم أدخل المتغيرات المطلوبة (قاعدة بيانات مجانية من
+> [Neon](https://neon.tech) + سر عشوائي + مفتاح AI مجاني من [Groq](https://console.groq.com/keys)).
+> **الدليل الكامل بالعربية: [DEPLOY.md](DEPLOY.md).**
+
+---
+
 ## نظرة عامة
 
 منصة `taiznow` تجمع في مكان واحد:
@@ -106,8 +116,17 @@
 - **مركز الأمن** `/security`: يكشف تغييرات الهوية والبُرد والصلاحيات وكلمات المرور
   والقنوات ومحاولات الدخول الفاشلة، ويقارن الإعدادات بـ«خط أساس معتمد» ويستعيده
   بضغطة واحدة عند الاختراق.
+- **تنبيهات فورية:** كل حدث بخطورة «مرتفع/حرج» (تغيير هوية، بريد، صفحة، صلاحية،
+  كلمة مرور، جهاز جديد، انحراف إعدادات) يُجدول تنبيهات تُسلَّم إلى قنوات الاسترجاع.
+  بلا SMTP تُحفظ الرسائل في «صندوق صادر» مرئي بدل فقدانها؛ و`SECURITY_WEBHOOK_URL`
+  يوجّه كل تنبيه إلى محادثة/Webhook.
+- **قنوات استرجاع:** بريد احتياطي/هاتف/TOTP من `/security` — تُقنَّع قيمها في الواجهة،
+  وتُستخدم مستقبلات للتنبيهات، وتُسجَّل إضافتها/حذفها كحدث أمني.
+- **سجل الدخول وكشف الأجهزة:** كل محاولة دخول تُسجَّل (IP/الجهاز/النتيجة)، والدخول
+  الناجح من جهاز أو موقع جديد يُرفع حدث «مرتفع» مع تنبيه.
 - **واجهات:** `GET/PATCH/POST /api/platform`, `/api/platform/email`, `/api/platform/pages`,
-  `GET/POST /api/security` (`scan` | `approve-baseline` | `restore` | `resolve`).
+  `GET/POST /api/security` (`scan` | `approve-baseline` | `restore` | `resolve` |
+  `dispatch-alerts` | `add-recovery` | `remove-recovery`).
 
 ## وسائل التواصل الاجتماعي
 
@@ -207,8 +226,8 @@ POST   /api/platform/pages          إنشاء صفحة /p/{slug} (platform:mana
 PUT    /api/platform/pages          مزامنة صفحات النظام (platform:manage)
 PATCH  /api/platform/pages          تعديل صفحة (platform:manage)
 DELETE /api/platform/pages?id=      حذف صفحة غير نظامية (platform:manage)
-GET    /api/security                الأحداث + الانحراف + خطوط الأساس (security:manage)
-POST   /api/security                فحص/اعتماد خط أساس/استعادة/معالجة (security:manage)
+GET    /api/security                الأحداث + الانحراف + التنبيهات + قنوات الاسترجاع + سجل الدخول (security:manage)
+POST   /api/security                فحص/اعتماد/استعادة/معالجة/إرسال تنبيهات/إدارة استرجاع (security:manage)
 ```
 
 ## التطوير

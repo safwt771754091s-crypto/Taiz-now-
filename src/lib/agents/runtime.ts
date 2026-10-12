@@ -3,6 +3,7 @@ import { analyzeClaim, analysisFromMedia } from "@/lib/ai";
 import { score } from "@/lib/confidence";
 import { writeProfessionally, draftRebuttal } from "@/lib/writer";
 import { publishContent, publishText } from "@/lib/social/connect";
+import { releaseDuePosts } from "@/lib/social/scheduler";
 import { slugify } from "@/lib/slug";
 import { AGENT_CATALOG } from "./catalog";
 import { yemenFeeds, collectFeed } from "./sources";
@@ -11,6 +12,7 @@ import { ensurePlatformEmails } from "@/lib/platform/email";
 import { getBrand } from "@/lib/platform/brand";
 import { runIntegrityScan, detectDrift } from "@/lib/security/config";
 import { recordSecurityEvent } from "@/lib/security/events";
+import { dispatchPendingAlerts } from "@/lib/security/alerts";
 
 export type AgentTickResult = {
   agent: string;
@@ -215,23 +217,30 @@ async function runWriter(): Promise<AgentTickResult> {
 
 /** PUBLISHER — distribute published content to all enabled channels. */
 async function runPublisher(): Promise<AgentTickResult> {
+  // 1. Release anything the team scheduled and whose time has come.
+  const released = await releaseDuePosts();
+
+  // 2. Distribute freshly published items that have no distribution yet.
   const items = await prisma.contentItem.findMany({
-    where: { status: "PUBLISHED", socialPosts: { none: { status: "published" } } },
+    where: { status: "PUBLISHED", socialPosts: { none: { status: { in: ["published", "scheduled"] } } } },
     take: 5,
   });
   let distributed = 0;
-  let channels = 0;
+  let channels = released.published;
   for (const item of items) {
     const { outcomes } = await publishContent(item.id);
     channels += outcomes.filter((o) => o.ok).length;
     distributed++;
   }
+  const parts: string[] = [];
+  if (released.due > 0) parts.push(`نُفّذ ${released.published}/${released.due} منشوراً مجدولاً`);
+  if (distributed > 0) parts.push(`نشر ${distributed} خبراً جديداً`);
   return {
     ok: true,
     agent: "الناشر",
     slug: "publisher",
-    summary: distributed > 0 ? `نشر ${distributed} خبراً على ${channels} قناة.` : "لا محتوى جديد للنشر.",
-    detail: { distributed, channels },
+    summary: parts.length > 0 ? `${parts.join("، ")} على ${channels} قناة.` : "لا محتوى جديد للنشر.",
+    detail: { distributed, channels, scheduledReleased: released.published, scheduledFailed: released.failed },
   };
 }
 
@@ -292,14 +301,18 @@ async function runGuardian(): Promise<AgentTickResult> {
   // 3. Settings drift: compare to the last approved baseline.
   const drift = await detectDrift();
 
-  // 4. Security sweep: surface unresolved high-severity events for the log.
+  // 4. Deliver any queued security alerts (email / webhook / inbox).
+  const delivery = await dispatchPendingAlerts();
+
+  // 5. Security sweep: surface unresolved high-severity events for the log.
   const openHigh = await prisma.securityEvent.count({
     where: { resolved: false, severity: { in: ["HIGH", "CRITICAL"] } },
   });
 
   const summary =
     `زامن ${registered} صفحة، ${emailCount} بريد، ` +
-    (drift.drifted ? `ورصد انحرافاً في الإعدادات (${drift.differences.length} فرق).` : "ولم يرصد أي انحراف في الإعدادات.");
+    (drift.drifted ? `ورصد انحرافاً في الإعدادات (${drift.differences.length} فرق). ` : "ولم يرصد أي انحراف في الإعدادات. ") +
+    (delivery.sent + delivery.skipped > 0 ? `وأرسل ${delivery.sent + delivery.skipped} تنبيهاً.` : "ولا تنبيهات معلّقة.");
 
   return {
     ok: true,
@@ -314,6 +327,7 @@ async function runGuardian(): Promise<AgentTickResult> {
       drift: drift.drifted,
       differences: drift.differences,
       baseline: drift.baselineHash,
+      alerts: delivery,
       openHighSeverity: openHigh,
     },
   };

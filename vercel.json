@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "prisma generate && node scripts/migrate.mjs && next build",
+  "crons": [
+    { "path": "/api/cron/tick", "schedule": "0 3 * * *" }
+  ]
+}

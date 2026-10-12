@@ -13,7 +13,7 @@ export type SecurityInput = {
 /** Record a security event. Never throws — logging must not break a request. */
 export async function recordSecurityEvent(input: SecurityInput): Promise<void> {
   try {
-    await prisma.securityEvent.create({
+    const event = await prisma.securityEvent.create({
       data: {
         kind: input.kind,
         severity: input.severity ?? "INFO",
@@ -22,6 +22,15 @@ export async function recordSecurityEvent(input: SecurityInput): Promise<void> {
         actorId: input.actorId ?? null,
         subjectId: input.subjectId ?? null,
       },
+    });
+    // Queue alerts for high-severity events; delivery happens on the next tick.
+    const { notifySecurityEvent } = await import("@/lib/security/alerts");
+    await notifySecurityEvent({
+      id: event.id,
+      kind: event.kind,
+      severity: event.severity,
+      title: event.title,
+      detail: event.detail,
     });
   } catch {
     // Swallow: a failed audit write must not fail the primary action.

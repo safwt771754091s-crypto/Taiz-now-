@@ -14,6 +14,44 @@ type Event = {
 
 type Drift = { drifted: boolean; baselineHash: string | null; differences: string[] };
 
+type Alert = {
+  id: string;
+  channel: string;
+  recipient: string;
+  subject: string;
+  severity: string;
+  status: string;
+  error: string | null;
+  createdAt: string;
+};
+
+type Recovery = {
+  id: string;
+  kind: string;
+  kindLabel: string;
+  label: string;
+  masked: string;
+  verified: boolean;
+  primary: boolean;
+};
+
+type LoginRow = {
+  id: string;
+  email: string;
+  ok: boolean;
+  ip: string | null;
+  createdAt: string;
+};
+
+const ALERT_STATUS: Record<string, string> = {
+  PENDING: "بالانتظار",
+  SENT: "أُرسل",
+  FAILED: "فشل",
+  SKIPPED: "محفوظ (لا SMTP)",
+};
+
+const CHANNEL_LABELS: Record<string, string> = { EMAIL: "بريد", WEBHOOK: "Webhook", INBOX: "صندوق" };
+
 const SEV_STYLE: Record<string, string> = {
   INFO: "text-slate-300",
   LOW: "text-sky-300",
@@ -44,6 +82,11 @@ export default function SecurityConsole() {
   const [events, setEvents] = useState<Event[]>([]);
   const [drift, setDrift] = useState<Drift | null>(null);
   const [baselines, setBaselines] = useState<{ hash: string; createdAt: string }[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [recovery, setRecovery] = useState<Recovery[]>([]);
+  const [logins, setLogins] = useState<LoginRow[]>([]);
+  const [newKind, setNewKind] = useState("BACKUP_EMAIL");
+  const [newValue, setNewValue] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -55,6 +98,9 @@ export default function SecurityConsole() {
       setEvents(json.data.events);
       setDrift(json.data.drift);
       setBaselines(json.data.baselines);
+      setAlerts(json.data.alerts ?? []);
+      setRecovery(json.data.recovery ?? []);
+      setLogins(json.data.logins ?? []);
     } else setErr(json.error ?? "تعذر التحميل");
   }, []);
 
@@ -77,7 +123,30 @@ export default function SecurityConsole() {
     if (action === "scan") setMsg(json.data.drifted ? `رصد انحرافاً: ${json.data.differences.length} فرق.` : "السلامة سليمة — لا انحراف.");
     else if (action === "approve-baseline") setMsg("اعتُمد خط أساس جديد.");
     else if (action === "restore") setMsg(json.data.restored ? "استُعيدت الإعدادات المعتمدة." : "لا يوجد خط أساس معتمد.");
-    else setMsg("تم التعليم كمُعالَج.");
+    else if (action === "dispatch-alerts") setMsg(`أُرسل ${json.data.sent} وفشل ${json.data.failed} وسُجّل ${json.data.skipped}.`);
+    else if (action === "test-alert") {
+      const ok = json.data.results?.every((r: { status: string }) => r.status === "SENT");
+      setMsg(ok ? "أُرسل تنبيه اختبار بنجاح إلى كل قنوات الاسترجاع." : `لم يُرسل فعلياً (${json.data.transport === "inbox" ? "SMTP غير مهيأ" : "فشل الإرسال"}) — راجع سجل التنبيهات.`);
+    }
+    else setMsg("تم التنفيذ.");
+    load();
+  }
+
+  async function addRecovery() {
+    if (!newValue.trim()) return;
+    setBusy("add-recovery");
+    setErr(null);
+    setMsg(null);
+    const res = await fetch("/api/security", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "add-recovery", kind: newKind, value: newValue, primary: recovery.length === 0 }),
+    });
+    const json = await res.json();
+    setBusy(null);
+    if (!res.ok) return setErr(json.error ?? "فشل الإضافة");
+    setNewValue("");
+    setMsg("أُضيفت قناة الاسترجاع.");
     load();
   }
 
@@ -112,6 +181,105 @@ export default function SecurityConsole() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="card p-5">
+        <h2 className="mb-1 text-lg font-black">قنوات الاسترجاع</h2>
+        <p className="mb-4 text-xs text-[var(--muted)]">
+          بريد احتياطي أو رقم تُرسل إليه تنبيهات «الحارس» فور أي تغيير غير مصرّح به — لاستعادة السيطرة إذا تعذّر الدخول.
+        </p>
+        <ul className="mb-4 divide-y divide-[var(--border)]">
+          {recovery.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span className="text-sm">
+                <span className="chip me-2">{r.kindLabel}</span>
+                <span dir="ltr" className="font-mono text-xs">{r.masked}</span>
+                {r.primary && <span className="ms-2 text-xs text-brand">أساسية</span>}
+              </span>
+              <button className="chip text-xs" onClick={() => act("remove-recovery", r.id)}>حذف</button>
+            </li>
+          ))}
+          {recovery.length === 0 && <li className="py-2 text-sm text-[var(--muted)]">لا قنوات استرجاع بعد.</li>}
+        </ul>
+        <div className="flex flex-wrap gap-2">
+          <select className="w-40" value={newKind} onChange={(e) => setNewKind(e.target.value)}>
+            <option value="BACKUP_EMAIL">بريد احتياطي</option>
+            <option value="PHONE">رقم هاتف</option>
+            <option value="TOTP">TOTP</option>
+          </select>
+          <input className="w-64" dir="ltr" placeholder="backup@example.com" value={newValue} onChange={(e) => setNewValue(e.target.value)} />
+          <button className="chip" disabled={busy === "add-recovery"} onClick={addRecovery}>إضافة قناة</button>
+        </div>
+      </section>
+
+      <section className="card p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-black">تنبيهات الأمن</h2>
+          <div className="flex gap-2">
+            <button className="chip" disabled={busy === "test-alert"} onClick={() => act("test-alert")}>
+              إرسال تنبيه اختبار
+            </button>
+            <button className="chip" disabled={busy === "dispatch-alerts"} onClick={() => act("dispatch-alerts")}>
+              إرسال المعلّق الآن
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-right text-xs text-[var(--muted)]">
+              <tr>
+                <th className="py-2">الوقت</th>
+                <th>القناة</th>
+                <th>المستلم</th>
+                <th>الخطورة</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {alerts.map((a) => (
+                <tr key={a.id}>
+                  <td className="py-2 text-xs text-[var(--muted)]">{fmt(a.createdAt)}</td>
+                  <td className="text-xs">{CHANNEL_LABELS[a.channel] ?? a.channel}</td>
+                  <td dir="ltr" className="max-w-[12rem] truncate font-mono text-xs" title={a.recipient}>{a.recipient}</td>
+                  <td className={`text-xs font-bold ${SEV_STYLE[a.severity] ?? ""}`}>{a.severity}</td>
+                  <td className="text-xs" title={a.error ?? undefined}>{ALERT_STATUS[a.status] ?? a.status}</td>
+                </tr>
+              ))}
+              {alerts.length === 0 && (
+                <tr><td colSpan={5} className="py-3 text-center text-sm text-[var(--muted)]">لا تنبيهات.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="card p-5">
+        <h2 className="mb-3 text-lg font-black">سجل الدخول (آخر 30)</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-right text-xs text-[var(--muted)]">
+              <tr>
+                <th className="py-2">الوقت</th>
+                <th>الحساب</th>
+                <th>IP</th>
+                <th>النتيجة</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {logins.map((l) => (
+                <tr key={l.id}>
+                  <td className="py-2 text-xs text-[var(--muted)]">{fmt(l.createdAt)}</td>
+                  <td dir="ltr" className="text-xs">{l.email}</td>
+                  <td dir="ltr" className="font-mono text-xs">{l.ip ?? "—"}</td>
+                  <td className="text-xs">{l.ok ? <span className="text-emerald-300">ناجح</span> : <span className="text-rose-300">فاشل</span>}</td>
+                </tr>
+              ))}
+              {logins.length === 0 && (
+                <tr><td colSpan={4} className="py-3 text-center text-sm text-[var(--muted)]">لا سجل بعد.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="card p-5">
