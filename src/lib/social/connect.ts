@@ -32,7 +32,8 @@ export async function ensureConnections(): Promise<void> {
         handle: `${def.handlePrefix}taiznow`,
         accountName: "تعز الآن",
       },
-      update: { displayName: def.label, mode },
+      // Never downgrade a connection that was made LIVE via a stored credential.
+      update: { displayName: def.label, ...(mode === "LIVE" ? { mode } : {}) },
     });
     await prisma.platformIdentity.upsert({
       where: { provider: def.provider },
@@ -141,7 +142,13 @@ export async function publishContent(contentItemId: string): Promise<{ outcomes:
     if (!def) continue;
     if (!def.postable) continue; // video-first channels are out of scope for text distribution
     const body = byPlatform.get(conn.provider) ?? `${item.title}\n\n${item.summary}\n${url}`;
-    const result = await deliver({ provider: conn.provider, handle: conn.handle, body, url });
+    const result = await deliver({
+      provider: conn.provider,
+      handle: conn.handle,
+      body,
+      url,
+      credentials: (conn.credentials ?? undefined) as Record<string, unknown> | undefined,
+    });
     outcomes.push({ provider: conn.provider, label: conn.displayName, ok: result.ok, mode: result.mode, detail: result.detail });
 
     await prisma.socialPost.create({
@@ -173,7 +180,13 @@ export async function publishText(input: { title: string; body: string; url?: st
   for (const conn of connections) {
     const def = PROVIDER_MAP.get(conn.provider);
     if (!def || !def.postable) continue; // skip unknown + video-first channels
-    const result = await deliver({ provider: conn.provider, handle: conn.handle, body: `${input.title}\n\n${input.body}`, url: input.url });
+    const result = await deliver({
+      provider: conn.provider,
+      handle: conn.handle,
+      body: `${input.title}\n\n${input.body}`,
+      url: input.url,
+      credentials: (conn.credentials ?? undefined) as Record<string, unknown> | undefined,
+    });
     outcomes.push({ provider: conn.provider, label: conn.displayName, ok: result.ok, mode: result.mode, detail: result.detail });
     await prisma.socialConnection.update({
       where: { id: conn.id },

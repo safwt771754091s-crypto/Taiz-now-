@@ -62,6 +62,18 @@ export default function SocialConsole() {
     loadItems();
   }, [load, loadItems]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fb = params.get("fb");
+    if (fb === "ok") {
+      setMsg(`تم ربط صفحة فيسبوك: ${params.get("page") ?? ""} — الوضع الآن مباشر ✅`);
+      window.history.replaceState({}, "", "/social");
+    } else if (fb === "error") {
+      setErr(`فشل ربط فيسبوك: ${params.get("message") ?? "خطأ غير معروف"}`);
+      window.history.replaceState({}, "", "/social");
+    }
+  }, []);
+
   async function schedule(e: React.FormEvent) {
     e.preventDefault();
     setBusy("schedule");
@@ -214,9 +226,16 @@ export default function SocialConsole() {
                       {c.enabled ? "مفعّلة" : "معطّلة"}
                     </button>
                     {c.mode === "MOCK" && (
-                      <button onClick={() => connect(c.provider)} className="chip text-brand">
-                        ربط مباشر
-                      </button>
+                      <div className="flex flex-wrap gap-1">
+                        <button onClick={() => connect(c.provider)} className="chip text-brand">
+                          ربط مباشر
+                        </button>
+                        {c.provider === "facebook" && (
+                          <a href="/api/social/facebook" className="chip text-[#1877f2]">
+                            ربط بنقرة واحدة
+                          </a>
+                        )}
+                      </div>
                     )}
                   </div>
                 </td>
