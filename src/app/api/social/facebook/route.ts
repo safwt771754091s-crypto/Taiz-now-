@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { facebookAuthUrl, signState } from "@/lib/social/oauth";
+import { AuthError, requirePermission } from "@/lib/auth";
+import { facebookAuthUrl, requestOrigin, signState } from "@/lib/social/oauth";
 
 const STATE_COOKIE = "fb_oauth_nonce";
 
@@ -12,8 +12,16 @@ const STATE_COOKIE = "fb_oauth_nonce";
  * needs no App Review — the admin holds a role on the app.
  */
 export async function GET(req: Request) {
-  await requirePermission("social:manage");
-  const origin = new URL(req.url).origin;
+  const origin = requestOrigin(req);
+  try {
+    await requirePermission("social:manage");
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.redirect(`${origin}/login`);
+    }
+    throw err;
+  }
+
   const nonce = randomUUID();
   const state = signState(`${nonce}:${Date.now()}`);
 

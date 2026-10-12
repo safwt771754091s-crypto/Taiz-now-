@@ -31,6 +31,19 @@ export function oauthRedirectUri(origin: string, provider: string): string {
   return `${origin}/api/social/${provider}/callback`;
 }
 
+/**
+ * Resolve the public origin behind the sandbox proxy. `new URL(req.url)` only
+ * sees the internal localhost bind, so prefer the forwarded host/proto headers
+ * that the runtime sets — the OAuth redirect_uri must match what Meta has
+ * registered (the public https URL).
+ */
+export function requestOrigin(req: Request): string {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
+  if (host) return `${proto}://${host}`;
+  return new URL(req.url).origin;
+}
+
 /** Build Meta's OAuth dialog URL for the requested provider. */
 export function facebookAuthUrl(origin: string, state: string): string {
   const appId = process.env.FACEBOOK_APP_ID;

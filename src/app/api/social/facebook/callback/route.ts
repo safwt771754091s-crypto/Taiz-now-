@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { oauthRedirectUri, verifyState } from "@/lib/social/oauth";
+import { oauthRedirectUri, requestOrigin, verifyState } from "@/lib/social/oauth";
 
 const STATE_COOKIE = "fb_oauth_nonce";
 const GRAPH = "https://graph.facebook.com/v25.0";
@@ -22,7 +22,7 @@ async function graph<T>(url: string): Promise<T> {
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const origin = url.origin;
+  const origin = requestOrigin(req);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const denied = url.searchParams.get("error_description");
