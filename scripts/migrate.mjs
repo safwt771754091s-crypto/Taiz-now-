@@ -2,8 +2,11 @@ import { spawnSync } from "node:child_process";
 
 // Migrations run DDL, which a Neon/pgbouncer pool cannot execute.
 // prisma.config.ts already points `datasource.url` at the direct/unpooled URL
-// for any provider, so here we only need to fail loudly when no database is
-// configured at all. Kept dependency-free (no TS import) so it runs on any Node.
+// for any provider. Kept dependency-free (no TS import) so it runs on any Node.
+//
+// No database configured -> skip instead of failing the build, so a fresh
+// deploy succeeds and the UI is reachable before a DB is attached. Once a URL
+// is present, a failed migration still aborts the build (schema errors matter).
 const candidates = [
   process.env.DIRECT_URL,
   process.env.DATABASE_URL_UNPOOLED,
@@ -13,10 +16,12 @@ const candidates = [
   process.env.POSTGRES_URL,
 ];
 if (!candidates.some(Boolean)) {
-  console.error(
-    "No database URL found. Set DATABASE_URL (Neon pooled) or DATABASE_URL_UNPOOLED / POSTGRES_URL_NON_POOLING (Vercel Postgres).",
+  console.warn(
+    "⚠️  No database URL found — skipping migrations. Set DATABASE_URL (Neon) or "
+      + "connect Vercel Postgres (POSTGRES_PRISMA_URL) to enable the database. "
+      + "The app will build, but data-backed pages will error until then.",
   );
-  process.exit(1);
+  process.exit(0);
 }
 
 const result = spawnSync("npx", ["prisma", "migrate", "deploy"], { stdio: "inherit", env: process.env });
