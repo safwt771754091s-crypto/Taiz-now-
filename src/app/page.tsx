@@ -14,12 +14,22 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
 }
 
 export default async function Home() {
-  const [stats, news, rumors, corrections] = await Promise.all([
-    platformStats(),
-    listContent({ kind: "NEWS", take: 9 }),
-    listContent({ kind: "RUMOR", take: 5 }),
-    listContent({ kind: "CORRECTION", take: 4 }),
-  ]);
+  // A database hiccup must not take the whole homepage down with a raw 500.
+  // On failure we render the friendly empty state instead.
+  let stats = { news: 0, rumors: 0, corrections: 0, reports: 0, verified: 0, markers: 0 };
+  let news: Awaited<ReturnType<typeof listContent>> = [];
+  let rumors: Awaited<ReturnType<typeof listContent>> = [];
+  let corrections: Awaited<ReturnType<typeof listContent>> = [];
+  try {
+    [stats, news, rumors, corrections] = await Promise.all([
+      platformStats(),
+      listContent({ kind: "NEWS", take: 9 }),
+      listContent({ kind: "RUMOR", take: 5 }),
+      listContent({ kind: "CORRECTION", take: 4 }),
+    ]);
+  } catch (err) {
+    console.error("[home] database unavailable, rendering empty state:", err);
+  }
 
   const lead = news[0];
   const latestRumors = rumors as unknown as Item[];
