@@ -29,6 +29,13 @@ function findRepoRoot(start) {
   }
   const top = gitToplevel();
   if (top && hasSchema(top)) return top;
+  // Vercel clones the repository to /vercel/path0 and, when "Root Directory" is
+  // set to a subfolder (e.g. "public"), runs the build from inside it. Walking
+  // up normally reaches the repo, but fall back to the known clone paths in case
+  // the build is started from a copied subtree.
+  for (const guess of ["/vercel/path0", "/vercel/path1", "/vercel/path2"]) {
+    if (hasSchema(guess)) return guess;
+  }
   return null;
 }
 

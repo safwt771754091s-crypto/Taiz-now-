@@ -4,6 +4,7 @@ import { PROVIDERS, PROVIDER_MAP, providerEnvPresent, resolveMode } from "@/lib/
 import { draftRebuttal, writeProfessionally } from "@/lib/writer";
 import { draftSocialPosts } from "@/lib/ai";
 import { parseFeed, googleNewsFeedUrl, yemenFeeds, telegramChannelName, parseTelegramChannel, telegramSourceChannels, facebookSourcePages } from "@/lib/agents/sources";
+import { normalizeTitle, similarTitles, publisherOf, minSources, looksAggregated, tokenize } from "@/lib/agents/autopublish";
 
 describe("feed parser", () => {
   const rss = `<?xml version="1.0"?><rss><channel>
@@ -161,5 +162,63 @@ describe("social post drafting", () => {
     expect(platforms).toContain("facebook");
     expect(platforms).toContain("telegram");
     expect(drafts[0].body).toContain("https://example.test/news/my-slug");
+  });
+});
+
+describe("corroboration auto-publish helpers", () => {
+  it("normalises Arabic letters and strips the Google News publisher suffix", () => {
+    expect(normalizeTitle("إحباط هجمات حوثية واسعة في تعز - الجزيرة نت")).toBe(
+      "احباط هجمات حوثيه واسعه في تعز",
+    );
+    expect(normalizeTitle("أحمد وإبراهيم — تعز")).toBe("احمد وابراهيم تعز");
+  });
+
+  it("treats the same story from two outlets as similar", () => {
+    const a = "مقتل وإصابة 3 مدنيين جراء استهداف الحوثيين سيارة إسعاف في تعز - يمن مونيتور";
+    const b = "قصف حوثي يستهدف سيارة إسعاف في تعز ويودي بحياة سائقها ويصيب آخرين - المصدر أونلاين";
+    expect(similarTitles(a, b)).toBe(true);
+  });
+
+  it("keeps unrelated stories apart even when they share one place", () => {
+    const a = "مقتل وإصابة 3 مدنيين جراء استهداف الحوثيين سيارة إسعاف في تعز";
+    const b = "الأمم المتحدة: الجوع يهدد أكثر من 600 ألف شخص في تعز اليمنية";
+    expect(similarTitles(a, b)).toBe(false);
+  });
+
+  it("does not merge a live-blog headline with an unrelated story sharing a place", () => {
+    const a = "فجر اليمن.. درع الوطن والعمالقة ينفيان شائعات الحوثي بانسحابهم من مناطق غرب مأرب";
+    const b = "«التحالف» يعترض صاروخاً باتجاه الرياض... و«فجر اليمن» تضغط على الحوثيين";
+    expect(similarTitles(a, b)).toBe(false);
+  });
+
+  it("recognises known-reputable publishers and rejects unknown ones", () => {
+    expect(publisherOf("feed:google-news:تعز | الجزيرة نت")).toBe("الجزيرة");
+    expect(publisherOf("feed:google-news:تعز | رويترز")).toBe("رويترز");
+    expect(publisherOf("feed:google-news:تعز | مدونة مجهولة")).toBeNull();
+  });
+
+  it("flags live-blog / round-up headlines as aggregated", () => {
+    expect(looksAggregated("اليمن مباشر.. مقتل 100 حوثي.. والتحالف يعترض صاروخاً")).toBe(true);
+    expect(looksAggregated("أحداث وتطورات المعارك والمواجهات في اليمن")).toBe(true);
+    expect(looksAggregated("القوات الحكومية تصد هجوماً حوثياً على تعز")).toBe(false);
+  });
+
+  it("drops stopwords regardless of hamza/ta-marbuta spelling", () => {
+    const tokens = tokenize("أحداث وتطورات المعارك والمواجهات في تعز");
+    expect(tokens).not.toContain("احداث");
+    expect(tokens).not.toContain("تطورات");
+    expect(tokens).not.toContain("مواجهات");
+  });
+
+  it("requires at least two corroborating sources", () => {
+    const prev = process.env.AUTO_PUBLISH_MIN_SOURCES;
+    delete process.env.AUTO_PUBLISH_MIN_SOURCES;
+    expect(minSources()).toBe(2);
+    process.env.AUTO_PUBLISH_MIN_SOURCES = "1"; // below the floor -> clamped to 2
+    expect(minSources()).toBe(2);
+    process.env.AUTO_PUBLISH_MIN_SOURCES = "3";
+    expect(minSources()).toBe(3);
+    if (prev === undefined) delete process.env.AUTO_PUBLISH_MIN_SOURCES;
+    else process.env.AUTO_PUBLISH_MIN_SOURCES = prev;
   });
 });

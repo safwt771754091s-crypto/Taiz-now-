@@ -229,6 +229,16 @@ export default function SocialConsole() {
       {msg && <p className="card p-3 text-sm text-emerald-300">{msg}</p>}
       {err && <p className="card p-3 text-sm text-rose-300">{err}</p>}
 
+      {connections.some((c) => c.provider === "facebook" && c.mode === "MOCK") && (
+        <div className="card border-amber-400/40 bg-amber-500/5 p-4 text-sm">
+          <p className="font-bold text-amber-300">فيسبوك غير مربوط — لا يُنشر أي شيء على الصفحة حالياً</p>
+          <p className="mt-1 text-[var(--muted)]">
+            المنصة تعمل، لكن منشورات فيسبوك تُسجَّل محلياً فقط (وضع المحاكاة). اربط الصفحة بالتوكن
+            من القسم أدناه («ربط فيسبوك بالتوكن») ليبدأ النشر الفعلي على الصفحة.
+          </p>
+        </div>
+      )}
+
       <section className="card overflow-x-auto p-5">
         <h2 className="mb-3 text-lg font-bold">قنوات النشر</h2>
         <table className="w-full text-right text-sm">

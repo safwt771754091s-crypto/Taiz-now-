@@ -6,6 +6,7 @@ import { publishContent, publishText } from "@/lib/social/connect";
 import { releaseDuePosts } from "@/lib/social/scheduler";
 import { slugify } from "@/lib/slug";
 import { AGENT_CATALOG } from "./catalog";
+import { autoPublishCorroboratedNews, autoPublishEnabled, minSources } from "./autopublish";
 import { yemenFeeds, collectFeed, collectTelegramChannel, telegramSourceChannels, collectFacebookPages, facebookSourcePages } from "./sources";
 import { ensureSystemPages, checkPageIntegrity } from "@/lib/platform/pages";
 import { ensurePlatformEmails } from "@/lib/platform/email";
@@ -97,7 +98,7 @@ async function runCollector(): Promise<AgentTickResult> {
           title: item.title.slice(0, 180),
           description: (item.summary || item.title).slice(0, 4000),
           sourceUrl: item.link,
-          origin: item.source || kind,
+          origin: [item.source, item.publisher].filter(Boolean).join(" | "),
           anonymous: false,
           priority: 1,
         },
@@ -284,12 +285,30 @@ async function runVerifier(): Promise<AgentTickResult> {
     analyzedMedia++;
   }
 
+  // Auto-publish collected NEWS that is corroborated by several independent
+  // reputable publishers. This is the only automatic path to the public site;
+  // rumors, corrections and single-source claims always wait for a human.
+  const auto = autoPublishEnabled()
+    ? await autoPublishCorroboratedNews()
+    : { considered: 0, published: [], skipped: [] };
+
   return {
     ok: true,
     agent: "المدقّق",
     slug: "verifier",
-    summary: `دقّق ${scored} عنصراً وحلّل ${analyzedMedia} وسائط${advisoryFlags ? ` — ${advisoryFlags} بحاجة انتباه المراجع` : ""}.`,
-    detail: { scored, analyzedMedia, advisoryFlags },
+    summary:
+      `دقّق ${scored} عنصراً وحلّل ${analyzedMedia} وسائط` +
+      (auto.published.length ? ` — نشر ${auto.published.length} خبراً مؤكَّداً بتوافق المصادر` : "") +
+      (advisoryFlags ? ` — ${advisoryFlags} بحاجة انتباه المراجع` : "") +
+      ".",
+    detail: {
+      scored,
+      analyzedMedia,
+      advisoryFlags,
+      autoPublished: auto.published.length,
+      autoPublishSkipped: auto.skipped.length,
+      minSources: minSources(),
+    },
   };
 }
 
@@ -330,26 +349,34 @@ async function runPublisher(): Promise<AgentTickResult> {
   const released = await releaseDuePosts();
 
   // 2. Distribute freshly published items that have no distribution yet.
+  // "mock" counts as distributed: a channel with no credentials records a
+  // simulated post, and re-attempting it every tick would spam duplicate rows.
   const items = await prisma.contentItem.findMany({
-    where: { status: "PUBLISHED", socialPosts: { none: { status: { in: ["published", "scheduled"] } } } },
+    where: {
+      status: "PUBLISHED",
+      socialPosts: { none: { status: { in: ["published", "scheduled", "mock"] } } },
+    },
     take: 5,
   });
   let distributed = 0;
   let channels = released.published;
+  let simulated = 0;
   for (const item of items) {
     const { outcomes } = await publishContent(item.id);
-    channels += outcomes.filter((o) => o.ok).length;
+    channels += outcomes.filter((o) => o.ok && o.mode === "live").length;
+    simulated += outcomes.filter((o) => o.ok && o.mode === "mock").length;
     distributed++;
   }
   const parts: string[] = [];
   if (released.due > 0) parts.push(`نُفّذ ${released.published}/${released.due} منشوراً مجدولاً`);
   if (distributed > 0) parts.push(`نشر ${distributed} خبراً جديداً`);
+  if (simulated > 0) parts.push(`${simulated} قناة بلا مفاتيح (محاكاة)`);
   return {
     ok: true,
     agent: "الناشر",
     slug: "publisher",
-    summary: parts.length > 0 ? `${parts.join("، ")} على ${channels} قناة.` : "لا محتوى جديد للنشر.",
-    detail: { distributed, channels, scheduledReleased: released.published, scheduledFailed: released.failed },
+    summary: parts.length > 0 ? `${parts.join("، ")} — ${channels} قناة مباشرة.` : "لا محتوى جديد للنشر.",
+    detail: { distributed, channels, simulated, scheduledReleased: released.published, scheduledFailed: released.failed },
   };
 }
 

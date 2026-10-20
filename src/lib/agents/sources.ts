@@ -9,6 +9,8 @@ export type FeedItem = {
   link: string;
   summary: string;
   source: string;
+  /** The originating publisher (e.g. "الجزيرة نت"), when the feed exposes one. */
+  publisher?: string;
   publishedAt?: string;
 };
 
@@ -35,7 +37,13 @@ export function parseFeed(xml: string, sourceLabel: string): FeedItem[] {
         (block.match(/<link[^>]*href="([^"]+)"/i)?.[1] ?? "");
       const summary = stripHtml(tag(block, "description") || tag(block, "summary") || tag(block, "content"));
       const publishedAt = tag(block, "pubDate") || tag(block, "updated") || tag(block, "published");
-      return { title, link, summary, source: sourceLabel, publishedAt };
+      // Google News puts the originating outlet in <source>; other feeds name it
+      // in <author>. Keep it so corroboration can tell publishers apart.
+      const publisher =
+        tag(block, "source") ||
+        tag(block, "author") ||
+        (block.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1] ?? "").trim();
+      return { title, link, summary, source: sourceLabel, publisher: publisher || undefined, publishedAt };
     })
     .filter((it) => it.title.length > 4);
 }

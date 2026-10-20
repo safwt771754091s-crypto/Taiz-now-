@@ -173,21 +173,30 @@ owner@taiznow.ye  /  password
 
 ## ⚠️ حل مشكلة البناء: «Could not load --schema from prisma/schema.prisma»
 
-إذا ظهر في سجل النشر على Vercel هذا الخطأ:
+**السبب مؤكَّد بدليل من Vercel نفسه.** أربعة مشاريع Vercel مربوطة بهذا المستودع، وعلى
+نفس الالتزام (`f556469`) كانت النتيجة:
+
+| مشروع Vercel | «مجلد الجذر» (Root Directory) | النتيجة |
+|---|---|---|
+| `taiz-now` | (فارغ) | ✅ نجح |
+| `taiz-now-s5jv` | (فارغ) | ✅ نجح |
+| `taiz-now-ibjx` | (فارغ) | ✅ نجح |
+| `taiz-now--public` | **`public`** | ❌ فشل |
+
+المشروع الفاشل مضبوط على **`public`** — وهو مجلد الملفات الثابتة، ولا يحتوي كود المشروع
+ولا مجلد `prisma/`. لذلك يفشل البناء ويظهر:
 
 ```
 Error: Could not load `--schema` from provided path `prisma/schema.prisma`: file or directory not found
 ```
 
-فالسبب ليس الكود — الملف موجود في المستودع. السبب أن **مشروع Vercel هذا مضبوط على
-«مجلد جذر» (Root Directory) خاطئ**، فيبدأ البناء من مجلد فرعي لا يحتوي مجلد `prisma`.
-هذا يحدث عندما يكون لديك أكثر من مشروع Vercel مربوط بنفس المستودع.
+ملف `prisma/schema.prisma` **موجود فعلاً** في المستودع — المشكلة في إعداد المشروع لا في الكود.
 
 ### الحل (دقيقة واحدة)
 
-1. افتح <https://vercel.com/dashboard> واختر المشروع الذي **فشل** (مثلاً `taiz-now--public`).
+1. افتح <https://vercel.com/dashboard> واختر المشروع الذي **فشل** (`taiz-now--public`).
 2. **Settings → Build & Deployment → Root Directory**.
-3. اترك الخانة **فارغة تماماً** (أو اضغط «Edit» ثم امسح أي قيمة) واحفظ.
+3. امسح القيمة (`public`) واترك الخانة **فارغة تماماً**، ثم احفظ.
    > الخانة الفارغة تعني «جذر المستودع» — وهو المكان الصحيح.
 4. ارجع إلى **Deployments** واضغط **Redeploy** على آخر نشرة.
 5. تأكد أيضاً أن **Framework Preset = Next.js** و**Build Command** فارغ
