@@ -172,6 +172,7 @@ model ContentItem {
   claim          String? // the exact claim being checked (for rumors)
   correctionNote String? // what was corrected (for corrections)
   location       String?
+  sectionSlug    String? // which owner-defined section this belongs to
   tags           String[]      @default([])
   publishedAt    DateTime?
   lastReviewedAt DateTime?
@@ -599,4 +600,23 @@ model Visit {
   @@index([createdAt])
   @@index([visitorId])
   @@index([path])
+}
+
+/// Owner-defined sections (categories) that drive the site's navigation and the
+/// grouping of news/rumors/corrections. Created and edited from the owner console.
+model Section {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  titleEn     String?
+  description String?
+  icon        String? // an emoji or short glyph shown next to the title
+  color       String? // hex accent for the section header
+  navOrder    Int      @default(100)
+  published   Boolean  @default(true)
+  system      Boolean  @default(false) // seeded default sections — not deletable
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([published, navOrder])
 }

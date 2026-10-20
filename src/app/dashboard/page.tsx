@@ -54,6 +54,11 @@ export default async function Dashboard() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {roleHasPermission(role, "platform:manage") && (
+            <Link href="/owner" className="chip border-brand/40 text-brand">
+              لوحة المالك
+            </Link>
+          )}
           {roleHasPermission(role, "report:triage") && (
             <span className="chip border-brand/40 text-brand">فرز البلاغات متاح</span>
           )}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Logo from "@/components/Logo";
 
 const SECTIONS = [
@@ -15,12 +15,15 @@ const SECTIONS = [
 ];
 
 const TEAM = [
+  { href: "/owner", label: "لوحة المالك" },
   { href: "/dashboard", label: "لوحة التحكم" },
   { href: "/visitors", label: "الزوار" },
   { href: "/agents", label: "الوكلاء" },
   { href: "/platform", label: "الهوية" },
   { href: "/security", label: "الأمن" },
 ];
+
+type OwnerSection = { slug: string; title: string; icon: string | null };
 
 export default function Nav({
   brandName = "تعز الآن",
@@ -31,6 +34,27 @@ export default function Nav({
 }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  const [ownerSections, setOwnerSections] = useState<OwnerSection[]>([]);
+
+  // The owner can add sections from the control panel; show them in the bar.
+  // The four default sections (news/rumors/corrections/maps) already have
+  // dedicated links above, so only extra sections are appended.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/public/sections");
+        const json = await res.json();
+        if (!res.ok) return;
+        const known = new Set(["news", "rumors", "corrections", "maps"]);
+        setOwnerSections(
+          (json.data.sections as OwnerSection[]).filter((s) => !known.has(s.slug)),
+        );
+      } catch {
+        /* navigation is best-effort; never block the shell */
+      }
+    })();
+  }, []);
+
   const today = new Intl.DateTimeFormat("ar-EG", {
     weekday: "long",
     day: "numeric",
@@ -95,6 +119,24 @@ export default function Nav({
               </Link>
             );
           })}
+          {ownerSections.map((s) => {
+            const href = `/sections/${s.slug}`;
+            const active = path.startsWith(href);
+            return (
+              <Link
+                key={s.slug}
+                href={href}
+                className={`px-3 py-2.5 text-sm font-bold transition ${
+                  active
+                    ? "border-b-[3px] border-[var(--brand)] text-[var(--brand)]"
+                    : "border-b-[3px] border-transparent text-[var(--foreground)] hover:text-[var(--brand)]"
+                }`}
+              >
+                {s.icon ? `${s.icon} ` : ""}
+                {s.title}
+              </Link>
+            );
+          })}
           <span className="mx-1 h-5 w-px bg-[var(--border)]" />
           {TEAM.map((l) => (
             <Link
@@ -114,7 +156,7 @@ export default function Nav({
         {/* Mobile menu */}
         {open && (
           <div className="grid gap-0 border-t border-[var(--border)] px-4 py-2 md:hidden">
-            {[...SECTIONS, ...TEAM].map((l) => (
+            {[...SECTIONS, ...ownerSections.map((s) => ({ href: `/sections/${s.slug}`, label: `${s.icon ?? ""} ${s.title}`.trim() })), ...TEAM].map((l) => (
               <Link
                 key={l.href}
                 href={l.href}

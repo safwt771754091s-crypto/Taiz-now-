@@ -17,6 +17,7 @@
     "db:setup": "prisma migrate deploy && tsx prisma/seed.ts"
   },
   "prisma": {
+    "schema": "prisma/schema.prisma",
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {

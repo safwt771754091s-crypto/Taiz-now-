@@ -8,12 +8,14 @@ export async function listContent(opts: {
   q?: string;
   take?: number;
   statuses?: ContentStatus[];
+  sectionSlug?: string;
 }) {
-  const { kind, q, take = 24, statuses = PUBLIC_STATUSES } = opts;
+  const { kind, q, take = 24, statuses = PUBLIC_STATUSES, sectionSlug } = opts;
   return prisma.contentItem.findMany({
     where: {
       status: { in: statuses },
       ...(kind ? { kind } : {}),
+      ...(sectionSlug ? { sectionSlug } : {}),
       ...(q
         ? {
             OR: [

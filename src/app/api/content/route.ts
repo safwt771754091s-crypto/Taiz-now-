@@ -12,6 +12,7 @@ const createSchema = z.object({
   claim: z.string().max(2000).optional(),
   correctionNote: z.string().max(2000).optional(),
   location: z.string().max(120).optional(),
+  sectionSlug: z.string().max(60).optional(),
   tags: z.array(z.string().max(40)).max(20).optional(),
   slug: z.string().max(200).optional(),
 });
@@ -21,14 +22,16 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const kind = searchParams.get("kind");
     const status = searchParams.get("status") ?? "PUBLISHED";
+    const section = searchParams.get("section");
     const q = searchParams.get("q")?.trim();
     const take = Math.min(Number(searchParams.get("take") ?? 30), 100);
     const skip = Math.max(Number(searchParams.get("skip") ?? 0), 0);
 
     const items = await prisma.contentItem.findMany({
       where: {
-        ...(kind ? { kind: kind as never } : {}),
+        ...(kind && kind !== "ALL" ? { kind: kind as never } : {}),
         ...(status && status !== "ALL" ? { status: status as never } : {}),
+        ...(section ? { sectionSlug: section } : {}),
         ...(q
           ? {
               OR: [
@@ -52,9 +55,11 @@ export async function GET(req: Request) {
         verdict: true,
         confidence: true,
         location: true,
+        sectionSlug: true,
         tags: true,
         publishedAt: true,
         lastReviewedAt: true,
+        updatedAt: true,
       },
     });
     return ok(items);
@@ -86,6 +91,7 @@ export async function POST(req: Request) {
         claim: data.claim || null,
         correctionNote: data.correctionNote || null,
         location: data.location || null,
+        sectionSlug: data.sectionSlug || null,
         tags: data.tags ?? [],
         status: "DRAFT",
         createdById: user?.id,

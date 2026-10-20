@@ -14,6 +14,7 @@ const patchSchema = z.object({
   claim: z.string().max(2000).nullable().optional(),
   correctionNote: z.string().max(2000).nullable().optional(),
   location: z.string().max(120).nullable().optional(),
+  sectionSlug: z.string().max(60).nullable().optional(),
   tags: z.array(z.string().max(40)).max(20).optional(),
 });
 
@@ -69,6 +70,27 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       ip: clientIp(req),
     });
     return ok(item);
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await requirePermission("platform:manage");
+    const { id } = await ctx.params;
+    const item = await prisma.contentItem.findUnique({ where: { id } });
+    if (!item) return ok(null, 404);
+    await prisma.contentItem.delete({ where: { id } });
+    await writeAudit({
+      actorId: user?.id,
+      action: "content.delete",
+      entityType: "ContentItem",
+      entityId: id,
+      detail: { title: item.title, kind: item.kind },
+      ip: clientIp(req),
+    });
+    return ok({ deleted: true });
   } catch (err) {
     return handleError(err);
   }
