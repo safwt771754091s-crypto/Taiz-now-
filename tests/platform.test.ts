@@ -110,3 +110,25 @@ describe("security alert email", () => {
     expect(typeof mod.renderSecurityEmail).toBe("function");
   });
 });
+
+describe("owner-managed sections", () => {
+  it("seeds the four default sections with unique slugs", async () => {
+    const { DEFAULT_SECTIONS, SECTION_SLUG_RE } = await import("@/lib/platform/sections");
+    const slugs = DEFAULT_SECTIONS.map((s) => s.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    expect(slugs).toEqual(["news", "rumors", "corrections", "maps"]);
+    for (const s of DEFAULT_SECTIONS) expect(s.slug).toMatch(SECTION_SLUG_RE);
+  });
+
+  it("derives a latin slug from a latin title", async () => {
+    const { slugFromTitle } = await import("@/lib/platform/sections");
+    expect(slugFromTitle("Economy News")).toBe("economy-news");
+  });
+
+  it("falls back to a generated slug for a non-latin (Arabic) title", async () => {
+    const { slugFromTitle, SECTION_SLUG_RE } = await import("@/lib/platform/sections");
+    const slug = slugFromTitle("اقتصاد");
+    expect(slug).toMatch(SECTION_SLUG_RE);
+    expect(slug).toMatch(/^section-/);
+  });
+});

@@ -99,6 +99,7 @@ model User {
   confidenceAudits ConfidenceRecord[]
   recoveryChannels RecoveryChannel[]
   loginEvents      LoginEvent[]
+  visits           Visit[]
 }
 
 model Permission {
@@ -171,6 +172,7 @@ model ContentItem {
   claim          String? // the exact claim being checked (for rumors)
   correctionNote String? // what was corrected (for corrections)
   location       String?
+  sectionSlug    String? // which owner-defined section this belongs to
   tags           String[]      @default([])
   publishedAt    DateTime?
   lastReviewedAt DateTime?
@@ -578,4 +580,43 @@ model LoginEvent {
 
   @@index([email, createdAt])
   @@index([fingerprint])
+}
+
+/// Every page view on the public site — the owner's "who visited" ledger.
+model Visit {
+  id        String   @id @default(cuid())
+  path      String
+  referer   String?
+  ip        String?
+  userAgent String?
+  country   String? // from an edge geo header when present (Vercel)
+  city      String?
+  isBot     Boolean  @default(false)
+  visitorId String? // hashed ip+ua, distinct-visitor counting; no raw id stored
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId])
+  @@index([path])
+}
+
+/// Owner-defined sections (categories) that drive the site's navigation and the
+/// grouping of news/rumors/corrections. Created and edited from the owner console.
+model Section {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  titleEn     String?
+  description String?
+  icon        String? // an emoji or short glyph shown next to the title
+  color       String? // hex accent for the section header
+  navOrder    Int      @default(100)
+  published   Boolean  @default(true)
+  system      Boolean  @default(false) // seeded default sections — not deletable
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([published, navOrder])
 }

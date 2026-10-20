@@ -33,7 +33,9 @@ export async function deliver(args: {
   }
 
   if (args.provider === "website") {
-    return { ok: true, mode: "mock", detail: "نُشر على موقع المنصة." };
+    // The platform's own site is the source of truth: once an item is PUBLISHED
+    // it is genuinely live here, so this is a real delivery, not a simulation.
+    return { ok: true, mode: "live", detail: "نُشر على موقع المنصة." };
   }
 
   const pick = (key: string): string | undefined => {

@@ -9,6 +9,8 @@ export type FeedItem = {
   link: string;
   summary: string;
   source: string;
+  /** The originating publisher (e.g. "الجزيرة نت"), when the feed exposes one. */
+  publisher?: string;
   publishedAt?: string;
 };
 
@@ -35,7 +37,13 @@ export function parseFeed(xml: string, sourceLabel: string): FeedItem[] {
         (block.match(/<link[^>]*href="([^"]+)"/i)?.[1] ?? "");
       const summary = stripHtml(tag(block, "description") || tag(block, "summary") || tag(block, "content"));
       const publishedAt = tag(block, "pubDate") || tag(block, "updated") || tag(block, "published");
-      return { title, link, summary, source: sourceLabel, publishedAt };
+      // Google News puts the originating outlet in <source>; other feeds name it
+      // in <author>. Keep it so corroboration can tell publishers apart.
+      const publisher =
+        tag(block, "source") ||
+        tag(block, "author") ||
+        (block.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1] ?? "").trim();
+      return { title, link, summary, source: sourceLabel, publisher: publisher || undefined, publishedAt };
     })
     .filter((it) => it.title.length > 4);
 }
@@ -98,4 +106,113 @@ export async function readArticle(url: string): Promise<string> {
   if (!res.ok) throw new Error(`reader HTTP ${res.status}`);
   const text = await res.text();
   return text.replace(/\s+/g, " ").trim().slice(0, 4000);
+}
+
+// ─── Telegram (public channel web preview) ────────────────────────────────────
+//
+// Telegram exposes a keyless public preview of any channel at t.me/s/<name>.
+// We read the posts that other people wrote there (the sources the platform
+// watches), NOT the platform's own published channel — that one is an output.
+
+/** Normalise "@name", "name" or "https://t.me/name" to a bare channel name. */
+export function telegramChannelName(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^https?:\/\/(?:www\.)?t\.me\/(?:s\/)?/i, "")
+    .replace(/^@/, "")
+    .replace(/\/.*$/, "");
+}
+
+/** Parse the public preview HTML of a Telegram channel into feed items. */
+export function parseTelegramChannel(html: string, channel: string): FeedItem[] {
+  const items: FeedItem[] = [];
+  for (const block of html.split('data-post="').slice(1)) {
+    const post = block.slice(0, block.indexOf('"'));
+    if (!post) continue;
+    const textMatch = block.match(/js-message_text[^>]*>([\s\S]*?)<\/div>/);
+    if (!textMatch) continue;
+    const text = decodeEntities(
+      textMatch[1].replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/[ \t]+/g, " "),
+    ).trim();
+    if (text.length < 8) continue;
+    const dateMatch = block.match(/<time datetime="([^"]+)"/);
+    items.push({
+      title: text.split("\n")[0].slice(0, 180),
+      link: `https://t.me/${post}`,
+      summary: text.slice(0, 2000),
+      source: `telegram:${channel}`,
+      publishedAt: dateMatch?.[1],
+    });
+  }
+  return items;
+}
+
+/** Fetch and parse a public Telegram channel's recent posts. */
+export async function collectTelegramChannel(channel: string): Promise<FeedItem[]> {
+  const name = telegramChannelName(channel);
+  if (!name) throw new Error("قناة تيليجرام غير معروفة");
+  const res = await fetch(`https://t.me/s/${name}`, {
+    headers: { "User-Agent": UA },
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`telegram HTTP ${res.status}`);
+  return parseTelegramChannel(await res.text(), name);
+}
+
+/** Telegram channels the collector should watch (env: TELEGRAM_SOURCE_CHANNELS). */
+export function telegramSourceChannels(): string[] {
+  return (process.env.TELEGRAM_SOURCE_CHANNELS || "")
+    .split(",")
+    .map((s) => telegramChannelName(s))
+    .filter(Boolean);
+}
+
+// ─── Facebook (Graph API page feed) ───────────────────────────────────────────
+//
+// Reading other pages' posts needs a Page access token with pages_read_engagement
+// (or a user token with the page you manage). When no token is configured we
+// return an empty list rather than fail — the collector then simply has no
+// Facebook source, exactly like an unconfigured RSS feed.
+
+/** Page ids/slugs the collector should watch (env: FACEBOOK_SOURCE_PAGES). */
+export function facebookSourcePages(): string[] {
+  return (process.env.FACEBOOK_SOURCE_PAGES || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Fetch recent posts from Facebook pages via the Graph API. */
+export async function collectFacebookPages(
+  pages: string[],
+  token: string | undefined,
+): Promise<FeedItem[]> {
+  if (!token || pages.length === 0) return [];
+  const items: FeedItem[] = [];
+  for (const page of pages) {
+    try {
+      const url =
+        `https://graph.facebook.com/v25.0/${encodeURIComponent(page)}/posts` +
+        `?fields=message,created_time,permalink_url&limit=10&access_token=${encodeURIComponent(token)}`;
+      const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) continue;
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: { id?: string; message?: string; created_time?: string; permalink_url?: string }[];
+      };
+      for (const p of json.data ?? []) {
+        const message = (p.message ?? "").trim();
+        if (message.length < 8) continue;
+        items.push({
+          title: message.split("\n")[0].slice(0, 180),
+          link: p.permalink_url || `https://www.facebook.com/${p.id ?? page}`,
+          summary: message.slice(0, 2000),
+          source: `facebook:${page}`,
+          publishedAt: p.created_time,
+        });
+      }
+    } catch {
+      // A single unreachable page must not abort the whole collection.
+    }
+  }
+  return items;
 }

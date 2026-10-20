@@ -62,27 +62,35 @@ export async function releaseDuePosts(limit = 25): Promise<ReleaseResult> {
 
   for (const post of due) {
     const conn = await prisma.socialConnection.findUnique({ where: { provider: post.platform } });
-    const result = await deliver({ provider: post.platform, handle: conn?.handle, body: post.body });
+    const result = await deliver({
+      provider: post.platform,
+      handle: conn?.handle,
+      body: post.body,
+      // Stored credentials must be forwarded: a channel connected through the UI
+      // keeps its token in the DB, not in the environment.
+      credentials: (conn?.credentials ?? undefined) as Record<string, unknown> | undefined,
+    });
+    const live = result.ok && result.mode === "live";
     await prisma.socialPost.update({
       where: { id: post.id },
       data: {
-        status: result.ok ? "published" : "failed",
-        publishedAt: result.ok ? new Date() : null,
-        error: result.ok ? null : result.detail,
+        status: result.ok ? (live ? "published" : "mock") : "failed",
+        publishedAt: live ? new Date() : null,
+        error: live ? null : result.detail,
       },
     });
     if (conn) {
       await prisma.socialConnection.update({
         where: { id: conn.id },
         data: {
-          lastPostedAt: result.ok ? new Date() : conn.lastPostedAt,
-          postCount: result.ok ? { increment: 1 } : undefined,
+          lastPostedAt: live ? new Date() : conn.lastPostedAt,
+          postCount: live ? { increment: 1 } : undefined,
           errorCount: result.ok ? undefined : { increment: 1 },
         },
       });
     }
-    if (result.ok) published++;
-    else failed++;
+    if (live) published++;
+    else if (!result.ok) failed++;
     outcomes.push({ id: post.id, platform: post.platform, ok: result.ok, detail: result.detail });
   }
 

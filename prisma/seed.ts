@@ -8,6 +8,7 @@ import { PROVIDERS } from "../src/lib/social/providers";
 import { getBrand, updateBrand } from "../src/lib/platform/brand";
 import { ensurePlatformEmails } from "../src/lib/platform/email";
 import { ensureSystemPages } from "../src/lib/platform/pages";
+import { ensureDefaultSections } from "../src/lib/platform/sections";
 import { platformAddress } from "../src/lib/platform/email";
 
 const DEMO_PASSWORD = "password";
@@ -310,6 +311,7 @@ async function main() {
   await updateBrand(brand, null);
   await ensurePlatformEmails(brand.name);
   const pageCount = await ensureSystemPages();
+  const sectionCount = await ensureDefaultSections();
   const emailCount = await prisma.platformEmailAccount.count();
 
   // Default recovery channel = the platform's own security mailbox (idempotent).
@@ -341,7 +343,7 @@ async function main() {
     });
   }
 
-  console.log(`Seed complete: users, sources, content, markers, social drafts, agents, connections, ${pageCount} pages, ${emailCount} mailboxes.`);
+  console.log(`Seed complete: users, sources, content, markers, social drafts, agents, connections, ${pageCount} pages, ${sectionCount} sections, ${emailCount} mailboxes.`);
 }
 
 main()

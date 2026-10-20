@@ -40,6 +40,14 @@ if [ ! -f "$LOG_DIR/watchdog.pid" ] || ! kill -0 "$(cat "$LOG_DIR/watchdog.pid" 
   echo $! > "$LOG_DIR/watchdog.pid"
 fi
 
+# Start the automatic snapshot watcher if not already running.
+# (Added 2026-10-12: keeps a recent rollback point whenever the code changes.)
+if [ ! -f "$LOG_DIR/snapshot_watch.pid" ] || ! kill -0 "$(cat "$LOG_DIR/snapshot_watch.pid" 2>/dev/null)" 2>/dev/null; then
+  echo "[start] Starting snapshot watcher..."
+  nohup bash "$ROOT/scripts/snapshot_watch.sh" > /dev/null 2>&1 &
+  echo $! > "$LOG_DIR/snapshot_watch.pid"
+fi
+
 # Start the AI agent autopilot loop if not already running.
 if [ ! -f "$LOG_DIR/autopilot.pid" ] || ! kill -0 "$(cat "$LOG_DIR/autopilot.pid" 2>/dev/null)" 2>/dev/null; then
   echo "[start] Starting autopilot loop..."

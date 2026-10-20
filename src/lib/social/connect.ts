@@ -151,20 +151,23 @@ export async function publishContent(contentItemId: string): Promise<{ outcomes:
     });
     outcomes.push({ provider: conn.provider, label: conn.displayName, ok: result.ok, mode: result.mode, detail: result.detail });
 
+    // A MOCK result is a local record only — never label it "published", or the
+    // dashboard claims a post went live on a channel that has no credentials.
     await prisma.socialPost.create({
       data: {
         platform: conn.provider,
         body,
-        status: result.ok ? "published" : "failed",
-        publishedAt: result.ok ? new Date() : null,
+        status: result.ok ? (result.mode === "live" ? "published" : "mock") : "failed",
+        publishedAt: result.ok && result.mode === "live" ? new Date() : null,
+        error: result.ok && result.mode === "live" ? null : result.detail,
         contentItemId: item.id,
       },
     });
     await prisma.socialConnection.update({
       where: { id: conn.id },
       data: {
-        lastPostedAt: result.ok ? new Date() : conn.lastPostedAt,
-        postCount: result.ok ? { increment: 1 } : undefined,
+        lastPostedAt: result.ok && result.mode === "live" ? new Date() : conn.lastPostedAt,
+        postCount: result.ok && result.mode === "live" ? { increment: 1 } : undefined,
         errorCount: result.ok ? undefined : { increment: 1 },
       },
     });
@@ -191,8 +194,8 @@ export async function publishText(input: { title: string; body: string; url?: st
     await prisma.socialConnection.update({
       where: { id: conn.id },
       data: {
-        lastPostedAt: result.ok ? new Date() : conn.lastPostedAt,
-        postCount: result.ok ? { increment: 1 } : undefined,
+        lastPostedAt: result.ok && result.mode === "live" ? new Date() : conn.lastPostedAt,
+        postCount: result.ok && result.mode === "live" ? { increment: 1 } : undefined,
         errorCount: result.ok ? undefined : { increment: 1 },
       },
     });

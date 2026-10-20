@@ -48,6 +48,18 @@ ensure_app() {
   echo $! > "$LOG_DIR/app.pid"
 }
 
+# Keep the AI autopilot loop alive. Without this, the platform stops collecting
+# and publishing the moment that process dies — which is the whole point of
+# always-on operation, so the watchdog must own it too.
+ensure_autopilot() {
+  if [ -f "$LOG_DIR/autopilot.pid" ] && kill -0 "$(cat "$LOG_DIR/autopilot.pid" 2>/dev/null)" 2>/dev/null; then
+    return 0
+  fi
+  log "Autopilot loop down — restarting"
+  nohup bash "$ROOT/scripts/autopilot_loop.sh" > "$LOG_DIR/autopilot_loop.log" 2>&1 &
+  echo $! > "$LOG_DIR/autopilot.pid"
+}
+
 # If apt/dpkg holds the lock, wait so we never fight an in-progress install.
 apt_busy() { fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; }
 
@@ -60,6 +72,7 @@ while true; do
   else
     ensure_postgres || true
     ensure_app || true
+    ensure_autopilot || true
   fi
   sleep "$INTERVAL"
 done

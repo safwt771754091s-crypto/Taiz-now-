@@ -28,6 +28,7 @@ export const SYSTEM_PAGES: { route: string; slug: string; title: string; kind: P
   { route: "/platform", slug: "platform", title: "هوية المنصة والبريد", kind: "PLATFORM", navOrder: 70 },
   { route: "/security", slug: "security", title: "مركز الأمن", kind: "PLATFORM", navOrder: 75 },
   { route: "/about", slug: "about", title: "عن المنصة", kind: "CONTACT", navOrder: 80 },
+  { route: "/owner", slug: "owner", title: "لوحة المالك", kind: "PLATFORM", navOrder: 85 },
   { route: "/dashboard", slug: "dashboard", title: "لوحة التحكم", kind: "PLATFORM", navOrder: 90 },
   { route: "/login", slug: "login", title: "تسجيل الدخول", kind: "PLATFORM", navOrder: 95 },
 ];

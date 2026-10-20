@@ -6,7 +6,8 @@ import { publishContent, publishText } from "@/lib/social/connect";
 import { releaseDuePosts } from "@/lib/social/scheduler";
 import { slugify } from "@/lib/slug";
 import { AGENT_CATALOG } from "./catalog";
-import { yemenFeeds, collectFeed } from "./sources";
+import { autoPublishCorroboratedNews, autoPublishEnabled, minSources } from "./autopublish";
+import { yemenFeeds, collectFeed, collectTelegramChannel, telegramSourceChannels, collectFacebookPages, facebookSourcePages } from "./sources";
 import { ensureSystemPages, checkPageIntegrity } from "@/lib/platform/pages";
 import { ensurePlatformEmails } from "@/lib/platform/email";
 import { getBrand } from "@/lib/platform/brand";
@@ -44,58 +45,88 @@ async function record(agentId: string, slug: string, action: string, result: Age
 /** COLLECTOR — pull fresh items from public feeds into the report queue. */
 async function runCollector(): Promise<AgentTickResult> {
   const feeds = yemenFeeds().slice(0, Number(process.env.COLLECTOR_MAX_FEEDS || 5));
+  const channels = telegramSourceChannels();
+  const pages = facebookSourcePages();
+  const fbToken = process.env.FACEBOOK_READ_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
   const sinceHours = Number(process.env.COLLECTOR_SINCE_HOURS || 72);
   const cutoff = Date.now() - sinceHours * 3600_000;
   let collected = 0;
   let skipped = 0;
   const errors: string[] = [];
+  const counts: Record<string, number> = { rss: 0, telegram: 0, facebook: 0 };
+
+  // Collect from every source first, then de-duplicate and store in one pass so
+  // the same story arriving on two channels is only queued once.
+  const batches: { kind: string; items: Awaited<ReturnType<typeof collectFeed>> }[] = [];
 
   for (const feed of feeds) {
     try {
-      const items = await collectFeed(feed.url, feed.label);
-      for (const item of items.slice(0, 10)) {
-        if (!item.link || !item.title) continue;
-        const published = item.publishedAt ? Date.parse(item.publishedAt) : NaN;
-        if (Number.isFinite(published) && published < cutoff) {
-          skipped++;
-          continue;
-        }
-        const existing = await prisma.report.findFirst({ where: { sourceUrl: item.link } });
-        if (existing) {
-          skipped++;
-          continue;
-        }
-        await prisma.report.create({
-          data: {
-            type: "NEWS",
-            title: item.title.slice(0, 180),
-            description: (item.summary || item.title).slice(0, 4000),
-            sourceUrl: item.link,
-            origin: feed.label,
-            anonymous: false,
-            priority: 1,
-          },
-        });
-        collected++;
-      }
+      batches.push({ kind: "rss", items: await collectFeed(feed.url, feed.label) });
     } catch (err) {
       errors.push(`${feed.label}: ${(err as Error).message}`);
     }
   }
+  for (const channel of channels) {
+    try {
+      batches.push({ kind: "telegram", items: await collectTelegramChannel(channel) });
+    } catch (err) {
+      errors.push(`telegram:${channel}: ${(err as Error).message}`);
+    }
+  }
+  try {
+    batches.push({ kind: "facebook", items: await collectFacebookPages(pages, fbToken) });
+  } catch (err) {
+    errors.push(`facebook: ${(err as Error).message}`);
+  }
+
+  for (const { kind, items } of batches) {
+    for (const item of items.slice(0, 10)) {
+      if (!item.link || !item.title) continue;
+      const published = item.publishedAt ? Date.parse(item.publishedAt) : NaN;
+      if (Number.isFinite(published) && published < cutoff) {
+        skipped++;
+        continue;
+      }
+      const existing = await prisma.report.findFirst({ where: { sourceUrl: item.link } });
+      if (existing) {
+        skipped++;
+        continue;
+      }
+      await prisma.report.create({
+        data: {
+          type: "NEWS",
+          title: item.title.slice(0, 180),
+          description: (item.summary || item.title).slice(0, 4000),
+          sourceUrl: item.link,
+          origin: [item.source, item.publisher].filter(Boolean).join(" | "),
+          anonymous: false,
+          priority: 1,
+        },
+      });
+      counts[kind] = (counts[kind] ?? 0) + 1;
+      collected++;
+    }
+  }
+
+  const sourceCount = feeds.length + channels.length + (pages.length && fbToken ? pages.length : 0);
+  const parts: string[] = [];
+  if (counts.rss) parts.push(`${counts.rss} من الروس`);
+  if (counts.telegram) parts.push(`${counts.telegram} من تيليجرام`);
+  if (counts.facebook) parts.push(`${counts.facebook} من فيسبوك`);
 
   return {
-    ok: errors.length < feeds.length,
+    ok: errors.length < sourceCount || sourceCount === 0,
     agent: "الجامع",
     slug: "collector",
     summary:
       collected > 0
-        ? `جمع ${collected} عنصراً جديداً من ${feeds.length} مصدر (تجاهل ${skipped} مكرر/قديم).`
-        : `لا عناصر جديدة (فحص ${feeds.length} مصدر، تجاهل ${skipped}).`,
-    detail: { collected, skipped, feeds: feeds.length, errors },
+        ? `جمع ${collected} عنصراً جديداً (${parts.join("، ")}) من ${sourceCount} مصدر.`
+        : `لا عناصر جديدة (فحص ${sourceCount} مصدر، تجاهل ${skipped}).`,
+    detail: { collected, skipped, sources: sourceCount, counts, errors },
   };
 }
 
-/** MONITOR — triage new reports and surface stuck content. */
+/** MONITOR — triage new reports, promote the worthiest into the content queue. */
 async function runMonitor(): Promise<AgentTickResult> {
   const pending = await prisma.report.findMany({ where: { status: "PENDING" }, take: 25 });
   let triaged = 0;
@@ -108,13 +139,85 @@ async function runMonitor(): Promise<AgentTickResult> {
     });
     triaged++;
   }
+
+  // Promote the highest-priority reports into draft content items so the
+  // verifier/writer stages have something to analyse. Promotion only creates an
+  // IN_REVIEW draft — publishing still requires a human, so nothing unverified
+  // ever reaches the public.
+  const promoted = await promoteReports();
+
   return {
     ok: true,
     agent: "الراصد",
     slug: "monitor",
-    summary: triaged > 0 ? `فرز ${triaged} بلاغاً جديداً.` : "لا بلاغات جديدة تستدعي الفرز.",
-    detail: { triaged },
+    summary:
+      triaged + promoted > 0
+        ? `فرز ${triaged} بلاغاً${promoted ? ` ورفع ${promoted} إلى قيد المراجعة` : ""}.`
+        : "لا بلاغات جديدة تستدعي الفرز.",
+    detail: { triaged, promoted },
   };
+}
+
+/**
+ * Turn triaged reports into draft content items (idempotent). A report is
+ * promoted once, tracked by a `from-report:<id>` tag, so re-running never
+ * duplicates. Kind is inferred from the report type.
+ */
+async function promoteReports(): Promise<number> {
+  const reports = await prisma.report.findMany({
+    where: { status: "UNDER_REVIEW", priority: { gte: 2 } },
+    orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+    take: 50,
+  });
+  let promoted = 0;
+  for (const r of reports) {
+    if (promoted >= 5) break;
+    const marker = `from-report:${r.id}`;
+    const already = await prisma.contentItem.findFirst({ where: { tags: { has: marker } } });
+    if (already) continue;
+
+    const kind = r.type === "NEWS" ? "NEWS" : "RUMOR";
+    const slug = await uniqueSlug(slugify(r.title).slice(0, 80) || `report-${r.id}`);
+    const item = await prisma.contentItem.create({
+      data: {
+        kind,
+        slug,
+        title: r.title.slice(0, 200),
+        summary: r.description.slice(0, 1000),
+        body: r.description.slice(0, 20000),
+        claim: kind === "RUMOR" ? r.title.slice(0, 2000) : null,
+        location: r.location ?? null,
+        status: "IN_REVIEW",
+        verdict: "UNVERIFIED",
+        confidence: 0,
+        tags: [marker, "agent-collected"],
+      },
+    });
+    if (r.sourceUrl) {
+      await prisma.evidence.create({
+        data: {
+          type: "SOURCE",
+          title: r.origin ?? "مصدر خارجي",
+          url: r.sourceUrl,
+          note: "رابط المصدر الأصلي كما جمعه وكيل الجامع.",
+          contentItemId: item.id,
+        },
+      });
+    }
+    promoted++;
+  }
+  return promoted;
+}
+
+/** Return a slug that is not already used by another content item. */
+async function uniqueSlug(base: string): Promise<string> {
+  let candidate = base;
+  for (let i = 2; i < 50; i++) {
+    const clash = await prisma.contentItem.findUnique({ where: { slug: candidate } });
+    if (!clash) return candidate;
+    candidate = `${base}-${i}`;
+  }
+  return `${base}-${Date.now()}`;
 }
 
 /** VERIFIER — score published-but-unscored content and analyze pending media. */
@@ -125,13 +228,21 @@ async function runVerifier(): Promise<AgentTickResult> {
     include: { evidence: { include: { source: true } } },
   });
   let scored = 0;
-  let falseCount = 0;
+  let advisoryFlags = 0;
   for (const item of candidates) {
     const analysis = await analyzeClaim({
       claim: item.claim || item.title,
       evidenceText: item.evidence.map((e) => e.title).join("\n"),
     });
     const result = score(analysis.suggestedSignals);
+    // The numeric score is always recorded, but the agent never stamps a public
+    // verdict of its own: on a real news platform "no evidence yet" must not be
+    // read as "false". The advisory verdict is kept in the confidence record for
+    // reviewers, while the item's public verdict stays UNVERIFIED until a human
+    // confirms it (content.verify). This also stops the responder from issuing
+    // rebuttals against content nobody has actually checked.
+    const humanSet = item.verdict !== "UNVERIFIED";
+    const publicVerdict = humanSet ? item.verdict : "UNVERIFIED";
     await prisma.confidenceRecord.create({
       data: {
         entityType: "ContentItem",
@@ -145,15 +256,15 @@ async function runVerifier(): Promise<AgentTickResult> {
         humanScore: analysis.suggestedSignals.human,
         total: result.total,
         verdict: result.verdict,
-        breakdown: { ...result, reasoning: analysis.reasoning, agent: "verifier" },
+        breakdown: { ...result, reasoning: analysis.reasoning, agent: "verifier", advisory: !humanSet },
       },
     });
     await prisma.contentItem.update({
       where: { id: item.id },
-      data: { confidence: result.total, verdict: result.verdict },
+      data: { confidence: result.total, verdict: publicVerdict },
     });
     scored++;
-    if (result.verdict === "FALSE") falseCount++;
+    if (result.verdict === "FALSE" || result.verdict === "SUSPICIOUS") advisoryFlags++;
   }
 
   // Analyze media assets that have not been analyzed yet.
@@ -174,12 +285,30 @@ async function runVerifier(): Promise<AgentTickResult> {
     analyzedMedia++;
   }
 
+  // Auto-publish collected NEWS that is corroborated by several independent
+  // reputable publishers. This is the only automatic path to the public site;
+  // rumors, corrections and single-source claims always wait for a human.
+  const auto = autoPublishEnabled()
+    ? await autoPublishCorroboratedNews()
+    : { considered: 0, published: [], skipped: [] };
+
   return {
     ok: true,
     agent: "المدقّق",
     slug: "verifier",
-    summary: `دقّق ${scored} عنصراً وحلّل ${analyzedMedia} وسائط${falseCount ? ` — رصد ${falseCount} خبراً كاذباً` : ""}.`,
-    detail: { scored, analyzedMedia, falseCount },
+    summary:
+      `دقّق ${scored} عنصراً وحلّل ${analyzedMedia} وسائط` +
+      (auto.published.length ? ` — نشر ${auto.published.length} خبراً مؤكَّداً بتوافق المصادر` : "") +
+      (advisoryFlags ? ` — ${advisoryFlags} بحاجة انتباه المراجع` : "") +
+      ".",
+    detail: {
+      scored,
+      analyzedMedia,
+      advisoryFlags,
+      autoPublished: auto.published.length,
+      autoPublishSkipped: auto.skipped.length,
+      minSources: minSources(),
+    },
   };
 }
 
@@ -220,26 +349,34 @@ async function runPublisher(): Promise<AgentTickResult> {
   const released = await releaseDuePosts();
 
   // 2. Distribute freshly published items that have no distribution yet.
+  // "mock" counts as distributed: a channel with no credentials records a
+  // simulated post, and re-attempting it every tick would spam duplicate rows.
   const items = await prisma.contentItem.findMany({
-    where: { status: "PUBLISHED", socialPosts: { none: { status: { in: ["published", "scheduled"] } } } },
+    where: {
+      status: "PUBLISHED",
+      socialPosts: { none: { status: { in: ["published", "scheduled", "mock"] } } },
+    },
     take: 5,
   });
   let distributed = 0;
   let channels = released.published;
+  let simulated = 0;
   for (const item of items) {
     const { outcomes } = await publishContent(item.id);
-    channels += outcomes.filter((o) => o.ok).length;
+    channels += outcomes.filter((o) => o.ok && o.mode === "live").length;
+    simulated += outcomes.filter((o) => o.ok && o.mode === "mock").length;
     distributed++;
   }
   const parts: string[] = [];
   if (released.due > 0) parts.push(`نُفّذ ${released.published}/${released.due} منشوراً مجدولاً`);
   if (distributed > 0) parts.push(`نشر ${distributed} خبراً جديداً`);
+  if (simulated > 0) parts.push(`${simulated} قناة بلا مفاتيح (محاكاة)`);
   return {
     ok: true,
     agent: "الناشر",
     slug: "publisher",
-    summary: parts.length > 0 ? `${parts.join("، ")} على ${channels} قناة.` : "لا محتوى جديد للنشر.",
-    detail: { distributed, channels, scheduledReleased: released.published, scheduledFailed: released.failed },
+    summary: parts.length > 0 ? `${parts.join("، ")} — ${channels} قناة مباشرة.` : "لا محتوى جديد للنشر.",
+    detail: { distributed, channels, simulated, scheduledReleased: released.published, scheduledFailed: released.failed },
   };
 }
 
