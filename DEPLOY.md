@@ -113,6 +113,41 @@ owner@taiznow.ye  /  password
 
 ---
 
+## ⚠️ حل مشكلة البناء: «Could not load --schema from prisma/schema.prisma»
+
+إذا ظهر في سجل النشر على Vercel هذا الخطأ:
+
+```
+Error: Could not load `--schema` from provided path `prisma/schema.prisma`: file or directory not found
+```
+
+فالسبب ليس الكود — الملف موجود في المستودع. السبب أن **مشروع Vercel هذا مضبوط على
+«مجلد جذر» (Root Directory) خاطئ**، فيبدأ البناء من مجلد فرعي لا يحتوي مجلد `prisma`.
+هذا يحدث عندما يكون لديك أكثر من مشروع Vercel مربوط بنفس المستودع.
+
+### الحل (دقيقة واحدة)
+
+1. افتح <https://vercel.com/dashboard> واختر المشروع الذي **فشل** (مثلاً `taiz-now--public`).
+2. **Settings → Build & Deployment → Root Directory**.
+3. اترك الخانة **فارغة تماماً** (أو اضغط «Edit» ثم امسح أي قيمة) واحفظ.
+   > الخانة الفارغة تعني «جذر المستودع» — وهو المكان الصحيح.
+4. ارجع إلى **Deployments** واضغط **Redeploy** على آخر نشرة.
+5. تأكد أيضاً أن **Framework Preset = Next.js** و**Build Command** فارغ
+   (Vercel سيقرأ الأمر الصحيح من ملف `vercel.json` تلقائياً).
+
+### إن تكرر الخطأ
+- احذف المشروع المكرر من Vercel: يكفيك **مشروع واحد** مربوط بالمستودع.
+  المشاريع المكررة (`taiz-now--public`, `taiz-now-s5jv`, `taiz-now-ibjx`) تُنشئ نفس
+  البناء عدة مرات وتُربك الإعدادات. احتفظ بمشروع واحد فقط (`taiz-now`) واحذف الباقي
+  من **Project Settings → General → Delete Project**.
+- بعدها أعد الربط من <https://vercel.com/new> واختر المستودع مرة واحدة.
+
+> ملاحظة تقنية: أضفنا `scripts/build.mjs` الذي يجد جذر المستودع تلقائياً حتى لو بدأ
+> البناء من مجلد فرعي، لكن إن كان المشروع يشير إلى مستودع/فرع آخر فلا بد من تصحيح
+> «Root Directory» يدوياً كما في الخطوات أعلاه.
+
+---
+
 ## قائمة التحقق قبل الإطلاق ✅
 
 - [ ] قاعدة بيانات Postgres (Pooled) جاهزة
