@@ -1,0 +1,103 @@
+name: AI Agents Autopilot
+
+# Keeps the platform's AI agents running continuously, even when no one is
+# logged in and without needing a paid Vercel plan. Every 10 minutes GitHub
+# starts a fresh runner and runs one autopilot tick (collect → triage → verify →
+# write → publish → rebut). GitHub Actions minutes are free for public repos.
+#
+# Choose ONE of the two modes below (both are optional; if neither is set the
+# job just warns and exits, it never fails the repository).
+#
+# MODE A — trigger the production site (recommended, reuses your Vercel config):
+#   Repository secret : CRON_SECRET   (same value you set on Vercel)
+#   Repository variable: PLATFORM_URL (e.g. https://taiznow.vercel.app)
+#
+# MODE B — run the agents directly against the database:
+#   Repository secret : DATABASE_URL (production Postgres connection string)
+#   optional secrets  : DIRECT_URL, GROQ_API_KEY, TELEGRAM_BOT_TOKEN,
+#                       TELEGRAM_CHANNEL_ID, FACEBOOK_ACCESS_TOKEN,
+#                       FACEBOOK_PAGE_ID, FACEBOOK_READ_TOKEN
+#   optional variables: TELEGRAM_SOURCE_CHANNELS, FACEBOOK_SOURCE_PAGES
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: agents-autopilot
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Decide which mode to run
+        id: mode
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PLATFORM_URL: ${{ vars.PLATFORM_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$PLATFORM_URL" ] && [ -n "$CRON_SECRET" ]; then
+            echo "mode=http" >> "$GITHUB_OUTPUT"
+          elif [ -n "$DATABASE_URL" ]; then
+            echo "mode=db" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mode A — trigger the production cron endpoint
+        if: steps.mode.outputs.mode == 'http'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PLATFORM_URL: ${{ vars.PLATFORM_URL }}
+        run: |
+          echo "Pinging $PLATFORM_URL/api/cron/tick"
+          code=$(curl -sS -o /tmp/tick.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            --max-time 120 \
+            "$PLATFORM_URL/api/cron/tick" || true)
+          echo "HTTP $code"
+          head -c 2000 /tmp/tick.json || true
+          if [ "$code" != "200" ]; then
+            echo "::warning::cron endpoint returned $code (is deployment protection off?)"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.mode.outputs.mode == 'db'
+
+      - uses: actions/setup-node@v4
+        if: steps.mode.outputs.mode == 'db'
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.mode.outputs.mode == 'db'
+        run: npm ci
+
+      - name: Generate Prisma client
+        if: steps.mode.outputs.mode == 'db'
+        run: npx prisma generate
+
+      - name: Mode B — run agents directly against the database
+        if: steps.mode.outputs.mode == 'db'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_READ_TOKEN: ${{ secrets.FACEBOOK_READ_TOKEN }}
+          TELEGRAM_SOURCE_CHANNELS: ${{ vars.TELEGRAM_SOURCE_CHANNELS }}
+          FACEBOOK_SOURCE_PAGES: ${{ vars.FACEBOOK_SOURCE_PAGES }}
+        run: npx tsx scripts/autopilot.ts
+
+      - name: Nothing configured yet
+        if: steps.mode.outputs.mode == 'none'
+        run: |
+          echo "::warning::No autopilot mode configured. Set CRON_SECRET + PLATFORM_URL (Mode A) or DATABASE_URL (Mode B). See DEPLOY.md."

@@ -39,6 +39,9 @@ Vercel هي شركة صانعة Next.js — النشر عليها بضغطة و�
 | `CRON_SECRET` | نص عشوائي | **إلزامي** لتشغيل المهام المجدولة |
 | `GROQ_API_KEY` | مفتاح من <https://console.groq.com/keys> | مجاني — يفعّل الذكاء الاصطناعي |
 | `OLLAMA_ENABLED` | `false` | مهم: لا يوجد Ollama على Vercel |
+| `TELEGRAM_SOURCE_CHANNELS` | `@قناة1,@قناة2` | (اختياري) قنوات تيليجرام تقرأ منها |
+| `FACEBOOK_SOURCE_PAGES` | `pageId1,pageSlug2` | (اختياري) صفحات فيسبوك تقرأ منها |
+| `FACEBOOK_READ_TOKEN` | رمز صفحات | (اختياري) لقراءة صفحات المصادر |
 
 > ⚠️ **لا تضع** `OLLAMA_BASE_URL` على Vercel إطلاقاً.
 
@@ -97,19 +100,74 @@ owner@taiznow.ye  /  password
 
 ---
 
-## المهام المجدولة (Autopilot)
+## المهام المجدولة (Autopilot) — تشغيل الوكلاء دائماً ⭐
 
-الوكلاء (الجامع، المدقق، الكاتب، الناشر...) تعمل دورياً:
+الوكلاء (الجامع، الراصد، المدقق، الصائغ، الناشر، المفنّد، الحارس) يجمعون الأخبار
+من فيسبوك وتيليجرام، ويرصدون الشائعات، ويجهّزونها للمراجعة البشرية.
 
-- **Vercel:** `vercel.json` يسجّل مهمة يومية على `/api/cron/tick`.
-  > ملاحظة: خطة Vercel المجانية تسمح بمهمة واحدة **يومياً** فقط. للحصول على
-  > تحديث كل 10 دقائق، رقِّ الخطة إلى Pro، أو استخدم خدمة جدولة خارجية مجانية
-  > مثل <https://cron-job.org> تنادي الرابط:
-  > `https://<نطاقك>/api/cron/tick` مع ترويسة
-  > `Authorization: Bearer <CRON_SECRET>`.
-- **خادم دائم:** `docker-entrypoint.sh` ينادي نفس المسار كل 5 دقائق تلقائياً.
+> **مهم:** الوكلاء لا يعملون من تلقاء أنفسهم على Vercel المجاني — خطة Vercel المجانية
+> تسمح بمهمة مجدولة واحدة **يومياً** فقط. لذلك أضفنا حلاً مجانياً بالكامل يعمل كل
+> **10 دقائق**: ملف `.github/workflows/agents.yml` يستخدم **GitHub Actions**.
+> (دقائق GitHub Actions مجانية بلا حدود للمستودعات العامة — ومستودعك عام.)
 
-المسار محمي بـ `CRON_SECRET` — لا يمكن لأحد تشغيله من الخارج.
+### تشغيل الوكلاء كل 10 دقائق (خطوتان فقط)
+
+اذهب إلى مستودعك على GitHub → **Settings → Secrets and variables → Actions**.
+
+**الطريقة (أ) — الأسهل، وتستفيد من إعدادات Vercel نفسها:**
+1. تبويب **Secrets** → **New repository secret**:
+   - الاسم: `CRON_SECRET` — القيمة: نفس القيمة التي وضعتها في Vercel.
+2. تبويب **Variables** → **New repository variable**:
+   - الاسم: `PLATFORM_URL` — القيمة: رابط موقعك مثل `https://taiznow.vercel.app`.
+
+**الطريقة (ب) — تشغيل الوكلاء مباشرة على قاعدة البيانات (لا تحتاج موقعاً حياً):**
+1. تبويب **Secrets** → أضف `DATABASE_URL` (رابط Neon/Pooled).
+2. (اختياري) أضف مفاتيح التشغيل الحقيقي: `GROQ_API_KEY` (ذكاء اصطناعي مجاني)،
+   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID` (للنشر على قناتك),
+   `FACEBOOK_ACCESS_TOKEN`, `FACEBOOK_PAGE_ID` (للنشر على صفحتك),
+   `FACEBOOK_READ_TOKEN` (لقراءة صفحات المصادر).
+3. تبويب **Variables** → أضف المصادر التي تريد مراقبتها:
+   - `TELEGRAM_SOURCE_CHANNELS` = `@قناة1,@قناة2` (قنوات **أخرى** تقرأ منها).
+   - `FACEBOOK_SOURCE_PAGES` = `pageId1,pageSlug2` (صفحات **أخرى** تقرأ منها).
+
+بعد الإضافة، افتح تبويب **Actions** → اختر **AI Agents Autopilot** → **Run workflow**
+لتشغيل أول دورة فوراً والتأكد أنها تعمل. بعدها ستعمل تلقائياً كل 10 دقائق.
+
+> يمكنك استخدام الطريقتين معاً — الوركفلو يجرّب (أ) أولاً ثم (ب) تلقائياً.
+
+### كيف تتحقق أن الوكلاء يعملون؟
+من داخل المنصة: افتح **/agents** (لوحة الوكلاء). سترى لكل وكيل عدد مرات التشغيل
+وآخر تشغيل وملخص آخر دورة. على Vercel، افتح **Actions** في GitHub وسترى كل دورة
+ناجحة في السجل.
+
+### (اختياري) تشغيل يومي على Vercel أيضاً
+`vercel.json` يسجّل مهمة يومية على `/api/cron/tick`. المسار محمي بـ `CRON_SECRET`
+ولا يمكن لأحد تشغيله من الخارج.
+
+---
+
+## توحيد مشاريع Vercel (احتفظ بمشروع واحد فقط) 🧹
+
+قد يكون لديك أكثر من مشروع Vercel مربوط بنفس المستودع، وهذا سبب رئيسي لتكرار
+الفشل والارتباك. الأفضل أن يبقى **مشروع واحد** فقط.
+
+1. افتح <https://vercel.com/dashboard> وسجّل الدخول.
+2. سترى عدة مشاريع بنفس الاسم تقريباً (`taiz-now`, `taiz-now-s5jv`, `taiz-now-ibjx`,
+   `taiz-now--public`).
+3. اختر **المشروع الذي تريد إبقاءه** — هو الذي:
+   - يحتوي قاعدة البيانات (تبويب **Storage** فيه Postgres)، و
+   - يحتوي كل متغيّرات البيئة (تبويب **Settings → Environment Variables**).
+4. في بقية المشاريع: **Settings → General → Delete Project** → احذفها.
+   > لا تقلق: حذف المشروع لا يحذف كودك من GitHub إطلاقاً.
+
+### إيقاف حماية النشر (سبب ظهور «Protected by Vercel Authentication»)
+
+إن كان موقعك يطلب تسجيل دخول Vercel عند فتحه، فهذه **حماية النشر** مفعّلة بالخطأ:
+
+1. افتح المشروع → **Settings → Deployment Protection**.
+2. عند **Vercel Authentication** اختر **Disabled** (أو **Standard Protection** فقط
+   للنشرات التجريبية، مع إبقاء **Production** عاماً).
+3. احفظ. الآن يستطيع أي شخص فتح موقعك، وتعمل الطريقة (أ) في الوكلاء.
 
 ---
 
@@ -157,6 +215,9 @@ Error: Could not load `--schema` from provided path `prisma/schema.prisma`: file
 - [ ] `NEXTAUTH_URL` و `PLATFORM_URL` = النطاق الحقيقي
 - [ ] `OLLAMA_ENABLED=false` (على Vercel)
 - [ ] مفتاح AI (Groq أو OpenAI)
+- [ ] مشروع Vercel واحد فقط (احذف المكرر)
+- [ ] حماية النشر (Deployment Protection) معطّلة للـ Production
+- [ ] أسرار GitHub Actions مضبوطة (`CRON_SECRET` + `PLATFORM_URL` أو `DATABASE_URL`)
 - [ ] تغيير كلمة سر المدير
 - [ ] اختبار الدخول + إرسال بلاغ + نشر منشور
 

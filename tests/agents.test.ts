@@ -3,7 +3,7 @@ import { AGENT_CATALOG, AGENT_KIND_LABELS } from "@/lib/agents/catalog";
 import { PROVIDERS, PROVIDER_MAP, providerEnvPresent, resolveMode } from "@/lib/social/providers";
 import { draftRebuttal, writeProfessionally } from "@/lib/writer";
 import { draftSocialPosts } from "@/lib/ai";
-import { parseFeed, googleNewsFeedUrl, yemenFeeds } from "@/lib/agents/sources";
+import { parseFeed, googleNewsFeedUrl, yemenFeeds, telegramChannelName, parseTelegramChannel, telegramSourceChannels, facebookSourcePages } from "@/lib/agents/sources";
 
 describe("feed parser", () => {
   const rss = `<?xml version="1.0"?><rss><channel>
@@ -40,6 +40,44 @@ describe("feed parser", () => {
     expect(feeds).toHaveLength(2);
     expect(feeds[0].label).toBe("feed:a.test");
     delete process.env.SOURCE_FEEDS;
+  });
+});
+
+describe("telegram source", () => {
+  it("normalises @name, bare name and t.me urls to a channel name", () => {
+    expect(telegramChannelName("@TaizNews")).toBe("TaizNews");
+    expect(telegramChannelName("TaizNews")).toBe("TaizNews");
+    expect(telegramChannelName("https://t.me/TaizNews")).toBe("TaizNews");
+    expect(telegramChannelName("https://t.me/s/TaizNews/12")).toBe("TaizNews");
+  });
+
+  it("parses posts out of a public channel preview", () => {
+    const html = `
+      <div class="tgme_widget_message" data-post="Chan/7">
+        <div class="tgme_widget_message_text js-message_text" dir="auto">خبر عاجل: انقطاع الكهرباء عن المدينة</div>
+        <time datetime="2026-10-12T07:00:00+00:00"></time>
+      </div>
+      <div class="tgme_widget_message" data-post="Chan/8">
+        <div class="tgme_widget_message_text js-message_text" dir="auto">شائعة: صورة قديمة تزعم حادثة اليوم</div>
+      </div>`;
+    const items = parseTelegramChannel(html, "Chan");
+    expect(items).toHaveLength(2);
+    expect(items[0].title).toContain("انقطاع الكهرباء");
+    expect(items[0].link).toBe("https://t.me/Chan/7");
+    expect(items[0].source).toBe("telegram:Chan");
+    expect(items[0].publishedAt).toBe("2026-10-12T07:00:00+00:00");
+  });
+
+  it("reads watched channels from the environment", () => {
+    process.env.TELEGRAM_SOURCE_CHANNELS = "@A, https://t.me/B";
+    expect(telegramSourceChannels()).toEqual(["A", "B"]);
+    delete process.env.TELEGRAM_SOURCE_CHANNELS;
+  });
+
+  it("reads watched facebook pages from the environment", () => {
+    process.env.FACEBOOK_SOURCE_PAGES = "pageA,pageB";
+    expect(facebookSourcePages()).toEqual(["pageA", "pageB"]);
+    delete process.env.FACEBOOK_SOURCE_PAGES;
   });
 });
 
