@@ -4,19 +4,31 @@ import { dirname, join, resolve } from "node:path";
 
 // Vercel runs the build command from the project's "Root Directory", which on
 // some projects is set to a subfolder. Rather than trust that, we locate
-// prisma/schema.prisma by walking up from the current directory and run the
-// whole build from the repository root. This makes the build work no matter
-// where Vercel starts it.
+// prisma/schema.prisma by walking up from the current directory (and via git)
+// and run the whole build from the repository root. This makes the build work
+// no matter where Vercel starts it.
 const SCHEMA = join("prisma", "schema.prisma");
+
+function hasSchema(dir) {
+  return existsSync(join(dir, SCHEMA));
+}
+
+function gitToplevel() {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" });
+  if (result.status === 0) return result.stdout.trim();
+  return null;
+}
 
 function findRepoRoot(start) {
   let dir = resolve(start);
   for (let i = 0; i < 8; i += 1) {
-    if (existsSync(join(dir, SCHEMA))) return dir;
+    if (hasSchema(dir)) return dir;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
+  const top = gitToplevel();
+  if (top && hasSchema(top)) return top;
   return null;
 }
 
